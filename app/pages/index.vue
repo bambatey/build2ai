@@ -1,11 +1,10 @@
 <template>
   <div class="dashboard-page">
     <!-- Welcome Section -->
-    <div class="welcome-section">
+
       <div class="welcome-content">
         <h1 class="welcome-title">Hoş geldin</h1>
         <p class="welcome-subtitle">Yapısal modellerinizi AI ile dönüştürün</p>
-      </div>
     </div>
 
     <!-- Stats Grid -->
@@ -195,14 +194,15 @@ const programs = mockSupportedPrograms
 
 <style scoped>
 .dashboard-page {
-  padding: 2rem;
+  padding: 1rem 2rem 2rem 2rem;
   max-width: 1600px;
   margin: 0 auto;
 }
 
 /* Welcome Section */
 .welcome-section {
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
+  padding-top: 0.5rem;
 }
 
 .welcome-title {

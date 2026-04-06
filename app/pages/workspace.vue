@@ -254,7 +254,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .workspace-page {
-  height: 100vh;
+  min-height: 100vh;
+  height: 100%;
   background: var(--bg-primary);
   position: relative;
 }
@@ -264,7 +265,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  min-height: calc(100vh - 60px);
+  width: 100%;
   padding: 2rem;
 }
 
@@ -289,9 +291,10 @@ onBeforeUnmount(() => {
 }
 
 .mode-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  display: flex;
+  justify-content: center;
   gap: 2rem;
+  flex-wrap: wrap;
 }
 
 .mode-card {
@@ -304,6 +307,8 @@ onBeforeUnmount(() => {
   transition: all 0.3s;
   position: relative;
   overflow: hidden;
+  width: 350px;
+  max-width: 100%;
 }
 
 .mode-card::before {
@@ -459,6 +464,7 @@ onBeforeUnmount(() => {
   padding: 1.5rem;
   border-bottom: 1px solid var(--border-default);
   overflow-y: auto;
+  max-height: calc(100vh - 200px);
 }
 
 .section-title {
