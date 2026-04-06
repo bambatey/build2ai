@@ -146,7 +146,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useChatStore } from '~/stores/chat'
 import { mockProjects, formatTimeAgo } from '~/utils/mockData'
 
