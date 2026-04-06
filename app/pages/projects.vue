@@ -211,14 +211,16 @@ const handleNewProject = () => {
 /* Filters */
 .filters-section {
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  gap: 1.5rem;
   margin-bottom: 2rem;
 }
 
 .search-box {
   position: relative;
-  flex: 1;
-  max-width: 400px;
+  flex: 0 0 400px;
+  width: 400px;
+  min-width: 400px;
 }
 
 .search-icon {
@@ -240,6 +242,7 @@ const handleNewProject = () => {
   font-size: 0.9375rem;
   color: var(--text-primary);
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .search-input:focus {
@@ -253,7 +256,8 @@ const handleNewProject = () => {
 
 .filter-group {
   display: flex;
-  gap: 0.75rem;
+  gap: 1rem;
+  flex-shrink: 0;
 }
 
 .filter-select {
