@@ -67,15 +67,6 @@
 
     <!-- Open Project Mode -->
     <div v-else-if="currentMode === 'open'" class="workspace-content">
-      <!-- Header -->
-      <div class="workspace-header">
-        <button @click="backToSelection" class="back-btn">
-          <Icon name="lucide:arrow-left" />
-          Geri
-        </button>
-        <h2 class="workspace-title">{{ selectedProject?.name || 'Proje Aç' }}</h2>
-      </div>
-
       <!-- 2 Panel Layout: Project Info + Chat -->
       <div class="workspace-panels">
         <!-- Project Info Panel -->
@@ -182,12 +173,24 @@ const isResizing = ref(false)
 const startX = ref(0)
 const startWidth = ref(0)
 
+const router = useRouter()
+const route = useRoute()
+
+// Route'tan mode'u al
+watch(() => route.query.mode, (newMode) => {
+  if (newMode === 'new' || newMode === 'open') {
+    currentMode.value = newMode
+  } else {
+    currentMode.value = null
+  }
+}, { immediate: true })
+
 const selectMode = (mode: 'new' | 'open') => {
-  currentMode.value = mode
+  router.push({ path: '/workspace', query: { mode } })
 }
 
 const backToSelection = () => {
-  currentMode.value = null
+  router.push('/workspace')
   selectedProject.value = null
 }
 
