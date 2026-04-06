@@ -41,14 +41,6 @@
     <!-- New Project Mode -->
     <div v-else-if="currentMode === 'new'" class="workspace-content">
       <!-- Header -->
-      <div class="workspace-header">
-        <button @click="backToSelection" class="back-btn">
-          <Icon name="lucide:arrow-left" />
-          Geri
-        </button>
-        <h2 class="workspace-title">Yeni Proje</h2>
-      </div>
-
       <!-- 2 Panel Layout: Drawing + Chat -->
       <div class="workspace-panels">
         <!-- Drawing Panel -->
@@ -203,13 +195,18 @@ const selectProject = (project: any) => {
   selectedProject.value = project
 }
 
-const handleSketchExport = (data: { image: string; shapes: any }) => {
+const handleSketchExport = (data: { image: string; shapes: any; prompt: string }) => {
   console.log('Sketch exported:', data)
 
-  // Send to AI
-  chatStore.sendMessage(`Taslak çizimden yeni bir yapısal model oluştur. [Çizim eklendi]`)
+  // Send to AI with prompt
+  // TODO: API integration - send image and shapes data
+  chatStore.sendMessage(`${data.prompt}\n\n[Taslak çizim eklendi - ${Object.values(data.shapes).flat().length} şekil]`)
 
-  // TODO: Attach sketch image to chat message
+  console.log('Çizim ve prompt AI\'ya gönderildi:', {
+    prompt: data.prompt,
+    hasImage: !!data.image,
+    shapeCount: Object.values(data.shapes).flat().length,
+  })
 }
 
 // Panel resize

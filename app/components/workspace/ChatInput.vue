@@ -1,11 +1,24 @@
 <template>
   <div class="chat-input">
-    <!-- Textarea -->
     <div class="input-wrapper">
+      <!-- Action Buttons (left side) -->
+      <div class="action-buttons">
+        <button
+          v-for="action in actions"
+          :key="action.id"
+          @click="action.onClick"
+          class="action-btn"
+          :title="action.tooltip"
+        >
+          <Icon :name="action.icon" />
+        </button>
+      </div>
+
+      <!-- Textarea -->
       <textarea
         ref="textareaRef"
         v-model="message"
-        placeholder="Mesajınızı yazın... (Shift+Enter ile yeni satır)"
+        placeholder="Mesajınızı yazın..."
         class="message-input"
         rows="1"
         @keydown.enter="handleKeyDown"
@@ -17,22 +30,9 @@
         @click="handleSend"
         :disabled="!canSend"
         class="send-btn"
-        title="Gönder"
+        title="Gönder (Enter)"
       >
         <Icon name="lucide:send" />
-      </button>
-    </div>
-
-    <!-- Actions Row -->
-    <div class="actions-row">
-      <button
-        v-for="action in actions"
-        :key="action.id"
-        @click="action.onClick"
-        class="action-btn"
-        :title="action.tooltip"
-      >
-        <Icon :name="action.icon" />
       </button>
     </div>
   </div>
@@ -100,8 +100,40 @@ const adjustHeight = () => {
 .input-wrapper {
   position: relative;
   display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.action-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.action-btn :deep(svg) {
+  width: 16px;
+  height: 16px;
 }
 
 .message-input {
@@ -109,15 +141,17 @@ const adjustHeight = () => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: 8px;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   font-size: 0.9375rem;
   color: var(--text-primary);
   resize: none;
+  min-height: 40px;
   max-height: 120px;
   overflow-y: auto;
   transition: all 0.2s;
   font-family: inherit;
   line-height: 1.5;
+  box-sizing: border-box;
 }
 
 .message-input:focus {
@@ -157,36 +191,5 @@ const adjustHeight = () => {
 .send-btn :deep(svg) {
   width: 18px;
   height: 18px;
-}
-
-.actions-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.action-btn:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-blue);
-  color: var(--text-primary);
-}
-
-.action-btn :deep(svg) {
-  width: 16px;
-  height: 16px;
 }
 </style>

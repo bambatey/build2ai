@@ -86,6 +86,17 @@
         <p class="helper-subtext">Basit çizimler yapın - AI detayları tamamlayacak</p>
       </div>
     </div>
+
+    <!-- Prompt Input Area -->
+    <div class="prompt-area">
+      <input
+        v-model="promptText"
+        type="text"
+        placeholder="Model talimatları (örn: '3 katlı betonarme bina')"
+        class="prompt-input"
+        @keydown.enter.ctrl="exportSketch"
+      />
+    </div>
   </div>
 </template>
 
@@ -93,8 +104,11 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
 const emit = defineEmits<{
-  export: [data: { image: string; shapes: any[] }]
+  export: [data: { image: string; shapes: any[]; prompt: string }]
 }>()
+
+// Prompt text
+const promptText = ref('')
 
 // Canvas refs
 const stage = ref<any>(null)
@@ -168,14 +182,28 @@ const handleResize = () => {
   }
 }
 
+let resizeObserver: ResizeObserver | null = null
+
 onMounted(() => {
   handleResize()
   window.addEventListener('resize', handleResize)
   saveState()
+
+  // ResizeObserver ile container boyut değişikliklerini izle
+  if (canvasContainer.value) {
+    resizeObserver = new ResizeObserver(() => {
+      handleResize()
+    })
+    resizeObserver.observe(canvasContainer.value)
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  if (resizeObserver && canvasContainer.value) {
+    resizeObserver.unobserve(canvasContainer.value)
+    resizeObserver.disconnect()
+  }
 })
 
 // Drawing handlers
@@ -352,6 +380,17 @@ const clearCanvas = () => {
 
 const exportSketch = () => {
   if (stage.value) {
+    // Validation
+    if (lines.value.length === 0 && rectangles.value.length === 0 && circles.value.length === 0) {
+      alert('Lütfen önce bir çizim yapın!')
+      return
+    }
+
+    if (!promptText.value.trim()) {
+      alert('Lütfen model dönüştürme talimatlarınızı yazın!')
+      return
+    }
+
     // Export as image
     const dataURL = stage.value.getNode().toDataURL()
 
@@ -365,6 +404,7 @@ const exportSketch = () => {
     emit('export', {
       image: dataURL,
       shapes: shapesData,
+      prompt: promptText.value.trim(),
     })
   }
 }
@@ -383,20 +423,23 @@ const exportSketch = () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-primary);
+  min-height: 52px;
 }
 
 .toolbar-group {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
 .toolbar-divider {
   width: 1px;
-  height: 32px;
+  height: 28px;
   background: var(--border-default);
+  align-self: center;
 }
 
 .tool-btn {
@@ -407,12 +450,13 @@ const exportSketch = () => {
   justify-content: center;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
   padding: 0;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .tool-btn:hover:not(:disabled) {
@@ -434,11 +478,12 @@ const exportSketch = () => {
 
 .tool-btn.primary {
   width: auto;
-  padding: 0 1rem;
+  padding: 0 1.25rem;
   background: var(--accent-blue);
   color: white;
   font-size: 0.875rem;
   font-weight: 500;
+  height: 38px;
 }
 
 .tool-btn.primary:hover:not(:disabled) {
@@ -484,11 +529,46 @@ const exportSketch = () => {
 
 .canvas-helper p {
   font-size: 1rem;
+  color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
 
 .helper-subtext {
   font-size: 0.875rem;
+  color: var(--text-muted);
   opacity: 0.7;
+}
+
+/* Prompt Area */
+.prompt-area {
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  padding: 1rem;
+  flex-shrink: 0;
+}
+
+.prompt-input {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  height: 40px;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+.prompt-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  background: var(--bg-elevated);
+}
+
+.prompt-input::placeholder {
+  color: var(--text-muted);
 }
 </style>

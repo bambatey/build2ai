@@ -1,21 +1,10 @@
 <template>
   <div class="chat-panel">
     <!-- Chat Header -->
-    <div class="chat-header">
-      <div class="header-content">
-        <h3 class="header-title">AI Asistan</h3>
-        <select v-model="chatStore.model" class="model-select">
-          <option value="claude-opus-4-6">Opus 4.6</option>
-          <option value="claude-sonnet-4-6">Sonnet 4.6</option>
-          <option value="claude-haiku-4">Haiku 4</option>
-        </select>
-      </div>
-    </div>
-
     <!-- Quick Commands -->
     <div class="quick-commands">
       <button
-        v-for="command in chatStore.quickCommands.slice(0, 3)"
+        v-for="command in chatStore.quickCommands"
         :key="command.id"
         @click="handleQuickCommand(command)"
         class="quick-cmd-btn"
@@ -28,12 +17,11 @@
     <div ref="messagesContainer" class="messages-area">
       <!-- Welcome Message -->
       <div v-if="chatStore.messages.length === 0" class="welcome-message">
-        <div class="welcome-icon">
           <Icon name="lucide:sparkles" />
-        </div>
+
         <h4 class="welcome-title">Merhaba!</h4>
         <p class="welcome-text">
-          Dosyanızı yükleyin veya bir komut verin. Size nasıl yardımcı olabilirim?
+          Dosyanızı yükleyin veya bir komut verin. 
         </p>
       </div>
 
@@ -135,11 +123,14 @@ const handleQuickCommand = (command: any) => {
 
 /* Quick Commands */
 .quick-commands {
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 1rem;
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.625rem;
   border-bottom: 1px solid var(--border-default);
   overflow-x: auto;
+  background: var(--bg-primary);
+  min-height: 52px;
 }
 
 .quick-commands::-webkit-scrollbar {
@@ -147,29 +138,38 @@ const handleQuickCommand = (command: any) => {
 }
 
 .quick-cmd-btn {
-  padding: 0.375rem 0.75rem;
+  padding: 0.5rem 1.125rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.8125rem;
-  color: var(--text-secondary);
+  font-weight: 500;
+  color: var(--text-primary);
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.2s;
+  flex-shrink: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
 }
 
 .quick-cmd-btn:hover {
   background: var(--bg-elevated);
-  color: var(--text-primary);
   border-color: var(--accent-blue);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 }
 
 /* Messages Area */
 .messages-area {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: 0;
   scroll-behavior: smooth;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .messages-area::-webkit-scrollbar {
@@ -183,7 +183,7 @@ const handleQuickCommand = (command: any) => {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 3rem 1.5rem;
+  padding: 15rem;
 }
 
 .welcome-icon {
@@ -192,21 +192,22 @@ const handleQuickCommand = (command: any) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(139, 92, 246, 0.1);
+  background: transparent;
   border-radius: 12px;
   color: var(--accent-purple);
   margin-bottom: 1rem;
+  opacity: 0.3;
 }
 
 .welcome-icon :deep(svg) {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 3rem;
+  height: 3rem;
 }
 
 .welcome-title {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 
