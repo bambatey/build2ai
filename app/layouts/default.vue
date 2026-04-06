@@ -6,6 +6,8 @@
     <!-- Main Content -->
     <div class="main-content" :class="{ 'with-topbar': showTopBar }">
       <!-- Top Bar (isteğe bağlı) -->
+
+
       <!-- Page Content -->
       <main class="page-content">
         <slot />
@@ -37,7 +39,6 @@ const showTopBar = computed(() => {
   margin-left: 240px;
   min-height: 100vh;
   transition: margin-left 300ms ease;
-  overflow-x: hidden;
 }
 
 .main-content.with-topbar {
@@ -47,7 +48,6 @@ const showTopBar = computed(() => {
 .page-content {
   position: relative;
   z-index: 1;
-  height: 100%;
 }
 
 /* Sidebar collapse durumunda */

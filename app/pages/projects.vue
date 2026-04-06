@@ -174,7 +174,7 @@ const handleNewProject = () => {
 
 <style scoped>
 .projects-page {
-  padding: 2rem;
+  padding: 1rem 2rem 2rem 2rem;
   max-width: 1600px;
   margin: 0 auto;
 }
@@ -182,19 +182,22 @@ const handleNewProject = () => {
 /* Header */
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .header-content {
   flex: 1;
+  margin-bottom: 0;
+  padding-top: 0;
 }
 
 .page-title {
   font-size: 2rem;
   font-weight: 600;
   color: var(--text-primary);
+  margin-top: 0;
   margin-bottom: 0.5rem;
   letter-spacing: -0.02em;
 }
@@ -202,6 +205,7 @@ const handleNewProject = () => {
 .page-subtitle {
   font-size: 1rem;
   color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 /* Filters */

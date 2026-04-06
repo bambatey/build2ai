@@ -200,15 +200,16 @@ const programs = mockSupportedPrograms
 }
 
 /* Welcome Section */
-.welcome-section {
-  margin-bottom: 2rem;
-  padding-top: 0.5rem;
+.welcome-content {
+  margin-bottom: 1.5rem;
+  padding-top: 0;
 }
 
 .welcome-title {
   font-size: 2rem;
   font-weight: 600;
   color: var(--text-primary);
+  margin-top: 0;
   margin-bottom: 0.5rem;
   letter-spacing: -0.02em;
 }
@@ -223,7 +224,8 @@ const programs = mockSupportedPrograms
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 1.5rem;
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
+  margin-top: 0;
 }
 
 .stat-card {

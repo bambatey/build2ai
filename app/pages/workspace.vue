@@ -263,11 +263,11 @@ onBeforeUnmount(() => {
 /* Mode Selection */
 .mode-selection {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   min-height: calc(100vh - 60px);
   width: 100%;
-  padding: 2rem;
+  padding: 5rem 2rem 2rem 2rem;
 }
 
 .mode-container {
@@ -287,7 +287,7 @@ onBeforeUnmount(() => {
 .mode-subtitle {
   font-size: 1.125rem;
   color: var(--text-secondary);
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .mode-cards {
