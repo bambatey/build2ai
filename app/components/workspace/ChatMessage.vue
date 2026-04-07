@@ -93,8 +93,14 @@ const handleReject = () => {
 .chat-message {
   display: flex;
   gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   animation: slideIn 0.3s ease-out;
+}
+
+@media (min-width: 768px) {
+  .chat-message {
+    margin-bottom: 1.5rem;
+  }
 }
 
 .message-avatar {
@@ -146,9 +152,18 @@ const handleReject = () => {
 }
 
 .message-text {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   line-height: 1.6;
   color: var(--text-primary);
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+@media (min-width: 768px) {
+  .message-text {
+    font-size: 0.9375rem;
+  }
 }
 
 .message-text :deep(p) {
@@ -252,6 +267,7 @@ const handleReject = () => {
   border-radius: 8px;
   padding: 0.75rem;
   border: 1px solid var(--border-default);
+  overflow-x: auto;
 }
 
 /* Actions */
@@ -259,19 +275,28 @@ const handleReject = () => {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .action-btn {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
+  padding: 0.375rem 0.625rem;
   border-radius: 6px;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   border: none;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .action-btn {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.8125rem;
+  }
 }
 
 .action-btn.primary {

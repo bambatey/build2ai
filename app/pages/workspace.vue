@@ -40,14 +40,12 @@
 
     <!-- New Project Mode -->
     <div v-else-if="currentMode === 'new'" class="workspace-content">
-      <!-- Header -->
-      <!-- 2 Panel Layout: Drawing + Chat -->
       <div class="workspace-panels">
         <!-- Drawing Panel -->
         <div
           ref="drawingPanel"
           class="drawing-panel"
-          :style="{ width: `${drawingWidth}px` }"
+          :style="{ flexBasis: `${drawingWidth}px`, maxWidth: `${drawingWidth}px` }"
         >
           <WorkspaceDrawingCanvas @export="handleSketchExport" />
         </div>
@@ -67,13 +65,12 @@
 
     <!-- Open Project Mode -->
     <div v-else-if="currentMode === 'open'" class="workspace-content">
-      <!-- 2 Panel Layout: Project Info + Chat -->
       <div class="workspace-panels">
         <!-- Project Info Panel -->
         <div
           ref="projectPanel"
           class="project-panel"
-          :style="{ width: `${projectWidth}px` }"
+          :style="{ flexBasis: `${projectWidth}px`, maxWidth: `${projectWidth}px` }"
         >
           <div class="project-selector">
             <h3 class="section-title">Proje Seçin</h3>
@@ -174,6 +171,12 @@ const isResizing = ref(false)
 const startX = ref(0)
 const startWidth = ref(0)
 
+// Layout constraints
+const MIN_LEFT = 280
+const MIN_CHAT = 320
+const RESIZER_WIDTH = 4
+const SIDEBAR_WIDTH = 220 // sol nav genişliği (yaklaşık)
+
 const router = useRouter()
 const route = useRoute()
 
@@ -213,6 +216,21 @@ const handleSketchExport = (data: { image: string; shapes: any; prompt: string }
   })
 }
 
+// Maksimum sol panel genişliğini hesapla (chat'e yer kalsın diye)
+const getMaxLeftWidth = () => {
+  if (typeof window === 'undefined') return 1000
+  return Math.max(MIN_LEFT, window.innerWidth - SIDEBAR_WIDTH - RESIZER_WIDTH - MIN_CHAT)
+}
+
+// Pencere boyutu değişince sol paneli sınırla
+const clampLeftWidth = () => {
+  const max = getMaxLeftWidth()
+  if (drawingWidth.value > max) drawingWidth.value = max
+  if (projectWidth.value > max) projectWidth.value = max
+  if (drawingWidth.value < MIN_LEFT) drawingWidth.value = MIN_LEFT
+  if (projectWidth.value < MIN_LEFT) projectWidth.value = MIN_LEFT
+}
+
 // Panel resize
 const startResize = (event: MouseEvent) => {
   isResizing.value = true
@@ -227,7 +245,8 @@ const handleMouseMove = (event: MouseEvent) => {
   if (!isResizing.value) return
 
   const delta = event.clientX - startX.value
-  const newWidth = Math.max(300, Math.min(1000, startWidth.value + delta))
+  const maxAllowed = getMaxLeftWidth()
+  const newWidth = Math.max(MIN_LEFT, Math.min(maxAllowed, startWidth.value + delta))
 
   if (currentMode.value === 'new') {
     drawingWidth.value = newWidth
@@ -242,20 +261,26 @@ const stopResize = () => {
   document.body.style.userSelect = ''
 }
 
+const handleWindowResize = () => {
+  clampLeftWidth()
+}
+
 onMounted(() => {
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', stopResize)
+  window.addEventListener('resize', handleWindowResize)
+  clampLeftWidth()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', stopResize)
+  window.removeEventListener('resize', handleWindowResize)
 })
 </script>
 
 <style scoped>
 .workspace-page {
-  min-height: 100vh;
   height: 100%;
   background: var(--bg-primary);
   position: relative;
@@ -386,60 +411,32 @@ onBeforeUnmount(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-.workspace-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-default);
-  background: var(--bg-secondary);
-}
-
-.back-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.875rem;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.back-btn:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-blue);
-  color: var(--text-primary);
-}
-
-.workspace-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  overflow: hidden;
 }
 
 .workspace-panels {
   flex: 1;
   display: flex;
+  flex-direction: row;
   overflow: hidden;
+  gap: 0;
+  min-width: 0;
 }
 
 .drawing-panel,
 .project-panel {
-  height: 100%;
   overflow: hidden;
-  transition: width 0.1s;
+  min-width: 280px;
+  height: 100%;
+  flex-grow: 0;
+  flex-shrink: 1;
 }
 
 .chat-panel {
-  flex: 1;
-  height: 100%;
+  flex: 1 1 0;
   overflow: hidden;
+  min-width: 320px;
+  height: 100%;
 }
 
 .panel-resizer {
@@ -447,6 +444,7 @@ onBeforeUnmount(() => {
   background: var(--border-default);
   cursor: col-resize;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 
 .panel-resizer:hover {
@@ -602,5 +600,31 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+/* Responsive: dar ekranlarda panelleri alt alta ko */
+@media (max-width: 900px) {
+  .workspace-panels {
+    flex-direction: column;
+  }
+
+  .drawing-panel,
+  .project-panel {
+    max-width: 100% !important;
+    flex-basis: auto !important;
+    width: 100% !important;
+    height: 50%;
+    min-width: 0;
+  }
+
+  .chat-panel {
+    width: 100%;
+    height: 50%;
+    min-width: 0;
+  }
+
+  .panel-resizer {
+    display: none;
+  }
 }
 </style>

@@ -131,6 +131,7 @@ const handleQuickCommand = (command: any) => {
   overflow-x: auto;
   background: var(--bg-primary);
   min-height: 52px;
+  min-width: 0;
 }
 
 .quick-commands::-webkit-scrollbar {
@@ -138,11 +139,11 @@ const handleQuickCommand = (command: any) => {
 }
 
 .quick-cmd-btn {
-  padding: 0.5rem 1.125rem;
+  padding: 0.5rem 0.875rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: 8px;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -152,6 +153,13 @@ const handleQuickCommand = (command: any) => {
   height: 36px;
   display: flex;
   align-items: center;
+}
+
+@media (min-width: 768px) {
+  .quick-cmd-btn {
+    padding: 0.5rem 1.125rem;
+    font-size: 0.8125rem;
+  }
 }
 
 .quick-cmd-btn:hover {
@@ -165,11 +173,12 @@ const handleQuickCommand = (command: any) => {
 .messages-area {
   flex: 1;
   overflow-y: auto;
-  padding: 0;
+  padding: 1rem;
   scroll-behavior: smooth;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
 }
 
 .messages-area::-webkit-scrollbar {
@@ -183,7 +192,13 @@ const handleQuickCommand = (command: any) => {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 15rem;
+  padding: 3rem 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .welcome-message {
+    padding: 8rem 2rem;
+  }
 }
 
 .welcome-icon {
@@ -227,6 +242,7 @@ const handleQuickCommand = (command: any) => {
   background: var(--bg-tertiary);
   border-radius: 8px;
   width: fit-content;
+  max-width: 100%;
 }
 
 .typing-dots {

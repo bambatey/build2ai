@@ -5,9 +5,6 @@
 
     <!-- Main Content -->
     <div class="main-content" :class="{ 'with-topbar': showTopBar }">
-      <!-- Top Bar (isteğe bağlı) -->
-
-
       <!-- Page Content -->
       <main class="page-content">
         <slot />
@@ -32,13 +29,19 @@ const showTopBar = computed(() => {
 .app-layout {
   display: flex;
   position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .main-content {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   margin-left: 240px;
   min-height: 100vh;
-  transition: margin-left 300ms ease;
+  width: calc(100% - 240px);
+  overflow: hidden;
+  transition: margin-left 300ms ease, width 300ms ease;
 }
 
 .main-content.with-topbar {
@@ -48,17 +51,23 @@ const showTopBar = computed(() => {
 .page-content {
   position: relative;
   z-index: 1;
+  width: 100%;
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* Sidebar collapse durumunda */
 :deep(.sidebar.collapsed ~ .main-content) {
   margin-left: 72px;
+  width: calc(100% - 72px);
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .main-content {
     margin-left: 0;
+    width: 100%;
   }
 
   :deep(.sidebar) {

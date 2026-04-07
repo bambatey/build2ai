@@ -92,9 +92,15 @@ const adjustHeight = () => {
 
 <style scoped>
 .chat-input {
-  padding: 1rem;
+  padding: 0.75rem;
   border-top: 1px solid var(--border-default);
   background: var(--bg-primary);
+}
+
+@media (min-width: 768px) {
+  .chat-input {
+    padding: 1rem;
+  }
 }
 
 .input-wrapper {
@@ -102,6 +108,7 @@ const adjustHeight = () => {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  min-width: 0;
 }
 
 .action-buttons {
@@ -138,6 +145,7 @@ const adjustHeight = () => {
 
 .message-input {
   flex: 1;
+  min-width: 0;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: 8px;
@@ -152,6 +160,8 @@ const adjustHeight = () => {
   font-family: inherit;
   line-height: 1.5;
   box-sizing: border-box;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 .message-input:focus {
