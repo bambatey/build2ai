@@ -40,7 +40,7 @@ const showTopBar = computed(() => {
   margin-left: 240px;
   min-height: 100vh;
   width: calc(100% - 240px);
-  overflow: hidden;
+  overflow-x: hidden;
   transition: margin-left 300ms ease, width 300ms ease;
 }
 
@@ -53,8 +53,9 @@ const showTopBar = computed(() => {
   z-index: 1;
   width: 100%;
   min-width: 0;
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Sidebar collapse durumunda */
