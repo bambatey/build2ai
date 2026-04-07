@@ -45,7 +45,7 @@
     <!-- Projects Grid -->
     <div v-if="filteredProjects.length > 0" class="projects-grid">
       <div v-for="project in filteredProjects" :key="project.id" class="project-card">
-        <NuxtLink :to="`/projects/${project.id}`" class="card-link">
+        <button type="button" class="card-link" @click="handleOpenProject(project.id)">
           <div class="card-header">
             <div class="project-icon">
               <Icon name="lucide:folder" />
@@ -88,7 +88,7 @@
             <span class="footer-time">{{ formatTimeAgo(project.lastModified) }}</span>
             <Icon name="lucide:chevron-right" class="footer-icon" />
           </div>
-        </NuxtLink>
+        </button>
       </div>
     </div>
 
@@ -165,9 +165,17 @@ onMounted(() => {
   mockProjects.forEach(project => {
     projectStore.addProject(project)
   })
+  projectStore.hydrate()
 })
 
 const handleNewProject = () => {
+  // Aktif proje varsa kapat ki "yeni proje" akışı temiz başlasın
+  projectStore.closeProject()
+  router.push({ path: '/workspace', query: { mode: 'new' } })
+}
+
+const handleOpenProject = (id: string) => {
+  projectStore.openProject(id)
   router.push('/workspace')
 }
 </script>
@@ -304,6 +312,13 @@ const handleNewProject = () => {
   display: block;
   text-decoration: none;
   color: inherit;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
 }
 
 /* Card Header */

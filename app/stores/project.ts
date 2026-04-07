@@ -32,10 +32,39 @@ export interface Change {
   timestamp: Date
 }
 
+const STORAGE_KEY = 'structai:project-state'
+
+interface PersistedState {
+  activeProjectId: string | null
+  recentProjectIds: string[]
+}
+
+function loadPersisted(): PersistedState {
+  if (typeof window === 'undefined') return { activeProjectId: null, recentProjectIds: [] }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return { activeProjectId: null, recentProjectIds: [] }
+    return JSON.parse(raw)
+  } catch {
+    return { activeProjectId: null, recentProjectIds: [] }
+  }
+}
+
+function persist(state: PersistedState) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // ignore quota errors
+  }
+}
+
 export const useProjectStore = defineStore('project', {
   state: () => ({
     projects: [] as Project[],
     currentProject: null as Project | null,
+    activeProjectId: null as string | null,
+    recentProjectIds: [] as string[],
     files: [] as FileNode[],
     currentFile: null as FileNode | null,
     originalContent: '',
@@ -44,6 +73,17 @@ export const useProjectStore = defineStore('project', {
   }),
 
   getters: {
+    activeProject(state): Project | null {
+      if (!state.activeProjectId) return null
+      return state.projects.find(p => p.id === state.activeProjectId) ?? null
+    },
+
+    recentProjects(state): Project[] {
+      return state.recentProjectIds
+        .map(id => state.projects.find(p => p.id === id))
+        .filter((p): p is Project => !!p)
+    },
+
     changeStats: (state) => {
       const added = state.changes.filter(c => c.type === 'add').length
       const deleted = state.changes.filter(c => c.type === 'delete').length
@@ -66,6 +106,44 @@ export const useProjectStore = defineStore('project', {
   },
 
   actions: {
+    hydrate() {
+      const persisted = loadPersisted()
+      this.activeProjectId = persisted.activeProjectId
+      this.recentProjectIds = persisted.recentProjectIds
+    },
+
+    persistState() {
+      persist({
+        activeProjectId: this.activeProjectId,
+        recentProjectIds: this.recentProjectIds,
+      })
+    },
+
+    openProject(id: string) {
+      const project = this.projects.find(p => p.id === id)
+      if (!project) return
+
+      this.activeProjectId = id
+      this.currentProject = project
+      this.files = project.files
+
+      // Update recents (most recent first, max 10)
+      this.recentProjectIds = [
+        id,
+        ...this.recentProjectIds.filter(pid => pid !== id),
+      ].slice(0, 10)
+
+      this.persistState()
+    },
+
+    closeProject() {
+      this.activeProjectId = null
+      this.currentProject = null
+      this.files = []
+      this.currentFile = null
+      this.persistState()
+    },
+
     setCurrentProject(project: Project) {
       this.currentProject = project
       this.files = project.files
@@ -101,11 +179,18 @@ export const useProjectStore = defineStore('project', {
     },
 
     addProject(project: Project) {
+      if (this.projects.find(p => p.id === project.id)) return
       this.projects.push(project)
     },
 
     deleteProject(id: string) {
       this.projects = this.projects.filter(p => p.id !== id)
+      this.recentProjectIds = this.recentProjectIds.filter(pid => pid !== id)
+      if (this.activeProjectId === id) {
+        this.closeProject()
+      } else {
+        this.persistState()
+      }
     },
   },
 })

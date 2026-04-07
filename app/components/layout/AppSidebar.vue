@@ -15,19 +15,53 @@
       </NuxtLink>
     </div>
 
-    <!-- Navigation -->
-    <nav class="sidebar-nav">
+    <!-- MOD A: Aktif proje yok → genel nav + recents -->
+    <template v-if="!hasActiveProject">
+      <nav class="sidebar-nav">
+        <NuxtLink
+          v-for="item in navItems"
+          :key="item.path"
+          :to="item.path"
+          class="nav-item"
+          :class="{ active: isActiveRoute(item.path) }"
+        >
+          <Icon :name="item.icon" class="nav-icon" />
+          <span v-if="!isCollapsed" class="nav-label">{{ item.label }}</span>
+        </NuxtLink>
+      </nav>
+
+      <div v-if="!isCollapsed && recentProjects.length > 0" class="recent-section">
+        <div class="section-label">SON PROJELER</div>
+        <div class="recent-list">
+          <button
+            v-for="project in recentProjects.slice(0, 5)"
+            :key="project.id"
+            type="button"
+            class="recent-item"
+            @click="handleOpenRecent(project.id)"
+          >
+            <Icon name="lucide:folder" class="recent-icon" />
+            <span class="recent-name">{{ project.name }}</span>
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <!-- MOD B: Aktif proje var → switcher + chat history -->
+    <template v-else>
+      <LayoutProjectSwitcher :collapsed="isCollapsed" />
+
       <NuxtLink
-        v-for="item in navItems"
-        :key="item.path"
-        :to="item.path"
-        class="nav-item"
-        :class="{ active: isActiveRoute(item.path) }"
+        to="/projects"
+        class="back-link"
+        :class="{ collapsed: isCollapsed }"
       >
-        <Icon :name="item.icon" class="nav-icon" />
-        <span v-if="!isCollapsed" class="nav-label">{{ item.label }}</span>
+        <Icon name="lucide:arrow-left" />
+        <span v-if="!isCollapsed">Tüm projeler</span>
       </NuxtLink>
-    </nav>
+
+      <LayoutChatHistoryList v-if="!isCollapsed" />
+    </template>
 
     <!-- Agent Status -->
     <div class="sidebar-footer">
@@ -47,47 +81,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAgentStore } from '~/stores/agent'
+import { useProjectStore } from '~/stores/project'
+import { useChatStore } from '~/stores/chat'
+import { mockProjects } from '~/utils/mockData'
 
 const route = useRoute()
+const router = useRouter()
 const agentStore = useAgentStore()
+const projectStore = useProjectStore()
+const chatStore = useChatStore()
 const isCollapsed = ref(false)
 
 const navItems = [
-  {
-    path: '/',
-    label: 'Dashboard',
-    icon: 'lucide:layout-grid',
-  },
-  {
-    path: '/workspace',
-    label: 'Workspace',
-    icon: 'lucide:code-2',
-  },
-  {
-    path: '/projects',
-    label: 'Projeler',
-    icon: 'lucide:folder',
-  },
-  {
-    path: '/settings',
-    label: 'Ayarlar',
-    icon: 'lucide:settings',
-  },
+  { path: '/', label: 'Dashboard', icon: 'lucide:layout-grid' },
+  { path: '/projects', label: 'Projeler', icon: 'lucide:folder' },
+  { path: '/settings', label: 'Ayarlar', icon: 'lucide:settings' },
 ]
 
+const hasActiveProject = computed(() => !!projectStore.activeProjectId)
+const recentProjects = computed(() => projectStore.recentProjects)
+
 const isActiveRoute = (path: string) => {
-  if (path === '/') {
-    return route.path === '/'
-  }
+  if (path === '/') return route.path === '/'
   return route.path.startsWith(path)
 }
 
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
 }
+
+const handleOpenRecent = (id: string) => {
+  projectStore.openProject(id)
+  router.push('/workspace')
+}
+
+onMounted(() => {
+  // Store'u senkronla
+  mockProjects.forEach(p => projectStore.addProject(p))
+  projectStore.hydrate()
+  chatStore.hydrate()
+})
 </script>
 
 <style scoped>
@@ -144,24 +180,14 @@ const toggleCollapse = () => {
   font-family: 'JetBrains Mono', monospace;
   letter-spacing: -0.02em;
   white-space: nowrap;
-  opacity: 1;
-  transition: opacity 0.2s;
-}
-
-.sidebar-container.collapsed .logo-text {
-  opacity: 0;
-  width: 0;
-  overflow: hidden;
 }
 
 /* Navigation */
 .sidebar-nav {
-  flex: 1;
   padding: 1rem 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  overflow-y: auto;
 }
 
 .nav-item {
@@ -208,20 +234,104 @@ const toggleCollapse = () => {
 
 .nav-label {
   white-space: nowrap;
-  opacity: 1;
-  transition: opacity 0.2s;
 }
 
-.sidebar-container.collapsed .nav-label {
-  opacity: 0;
-  width: 0;
+.sidebar-container.collapsed .nav-label,
+.sidebar-container.collapsed .logo-text {
+  display: none;
+}
+
+/* Recent projects */
+.recent-section {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border-default);
+  margin-top: 0.5rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.section-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  padding: 0.5rem 0.5rem;
+}
+
+.recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  transition: all 0.15s;
+}
+
+.recent-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.recent-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+.recent-name {
+  flex: 1;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Back link */
+.back-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  margin: 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.back-link:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.back-link.collapsed {
+  justify-content: center;
+  padding: 0.625rem;
+}
+
+.back-link :deep(svg) {
+  width: 14px;
+  height: 14px;
 }
 
 /* Agent Status */
 .sidebar-footer {
   padding: 1rem;
   border-top: 1px solid var(--border-default);
+  margin-top: auto;
 }
 
 .agent-status {
@@ -295,20 +405,14 @@ const toggleCollapse = () => {
 }
 
 @keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .sidebar-container {
     transform: translateX(-100%);
   }
-
   .sidebar-container.mobile-open {
     transform: translateX(0);
   }

@@ -16,11 +16,12 @@
     </div>
 
     <div v-else class="projects-list space-y-3">
-      <NuxtLink
+      <button
         v-for="project in projects"
         :key="project.id"
-        :to="`/projects/${project.id}`"
-        class="project-item flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all group"
+        type="button"
+        @click="handleOpen(project.id)"
+        class="project-item flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all group w-full text-left"
       >
         <div class="project-icon">
           <Icon name="lucide:folder" class="w-5 h-5 text-[var(--accent-blue)]" />
@@ -38,16 +39,25 @@
         </div>
 
         <Icon name="lucide:chevron-right" class="w-4 h-4 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-      </NuxtLink>
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { mockProjects, formatTimeAgo } from '~/utils/mockData'
+import { useProjectStore } from '~/stores/project'
+
+const router = useRouter()
+const projectStore = useProjectStore()
 
 // Son 5 projeyi göster
 const projects = mockProjects.slice(0, 5)
+
+const handleOpen = (id: string) => {
+  projectStore.openProject(id)
+  router.push('/workspace')
+}
 </script>
 
 <style scoped>

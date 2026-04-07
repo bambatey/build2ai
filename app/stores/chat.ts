@@ -22,10 +22,45 @@ export interface QuickCommand {
 
 export interface ChatSession {
   id: string
+  projectId: string
   name: string
   messages: ChatMessage[]
   createdAt: Date
   lastActive: Date
+}
+
+const CHAT_STORAGE_KEY = 'structai:chat-state'
+
+interface PersistedChatState {
+  sessions: ChatSession[]
+  activeSessionId: string | null
+}
+
+function loadPersistedChat(): PersistedChatState {
+  if (typeof window === 'undefined') return { sessions: [], activeSessionId: null }
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY)
+    if (!raw) return { sessions: [], activeSessionId: null }
+    const parsed = JSON.parse(raw) as PersistedChatState
+    // Revive Date objects
+    parsed.sessions.forEach(s => {
+      s.createdAt = new Date(s.createdAt)
+      s.lastActive = new Date(s.lastActive)
+      s.messages.forEach(m => { m.timestamp = new Date(m.timestamp) })
+    })
+    return parsed
+  } catch {
+    return { sessions: [], activeSessionId: null }
+  }
+}
+
+function persistChat(state: PersistedChatState) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // ignore
+  }
 }
 
 export const useChatStore = defineStore('chat', {
@@ -84,10 +119,21 @@ export const useChatStore = defineStore('chat', {
       },
     ] as QuickCommand[],
     sessions: [] as ChatSession[],
-    currentSession: null as ChatSession | null,
+    activeSessionId: null as string | null,
   }),
 
   getters: {
+    activeSession(state): ChatSession | null {
+      if (!state.activeSessionId) return null
+      return state.sessions.find(s => s.id === state.activeSessionId) ?? null
+    },
+
+    sessionsByProject: (state) => (projectId: string): ChatSession[] => {
+      return state.sessions
+        .filter(s => s.projectId === projectId)
+        .sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime())
+    },
+
     messageCount: (state) => state.messages.length,
 
     lastMessage: (state) => {
@@ -127,8 +173,20 @@ export const useChatStore = defineStore('chat', {
       }
       this.messages.push(aiMessage)
 
+      // Aktif oturum lastActive güncelle
+      const active = this.sessions.find(s => s.id === this.activeSessionId)
+      if (active) {
+        active.lastActive = new Date()
+        // Başlık boşsa ilk mesajdan türet
+        if (active.name === 'Yeni Sohbet' && content.trim()) {
+          active.name = content.trim().slice(0, 40)
+        }
+      }
+      this.persistChatState()
+
       // Simüle edilmiş AI yanıtı (mock)
       await this.simulateAIResponse(aiMessage.id, content)
+      this.persistChatState()
     },
 
     async simulateAIResponse(messageId: string, userPrompt: string) {
@@ -287,24 +345,80 @@ Yardımcı olabileceğim konular:
       this.model = model
     },
 
-    createNewSession(name: string) {
+    hydrate() {
+      const persisted = loadPersistedChat()
+      this.sessions = persisted.sessions
+      this.activeSessionId = persisted.activeSessionId
+      const active = this.sessions.find(s => s.id === this.activeSessionId)
+      this.messages = active ? active.messages : []
+    },
+
+    persistChatState() {
+      persistChat({
+        sessions: this.sessions,
+        activeSessionId: this.activeSessionId,
+      })
+    },
+
+    createChat(projectId: string, name = 'Yeni Sohbet') {
       const session: ChatSession = {
         id: crypto.randomUUID(),
+        projectId,
         name,
         messages: [],
         createdAt: new Date(),
         lastActive: new Date(),
       }
       this.sessions.push(session)
-      this.currentSession = session
-      this.messages = []
+      this.activeSessionId = session.id
+      this.messages = session.messages
+      this.persistChatState()
+      return session
     },
 
-    loadSession(id: string) {
+    switchChat(id: string) {
       const session = this.sessions.find(s => s.id === id)
-      if (session) {
-        this.currentSession = session
-        this.messages = session.messages
+      if (!session) return
+      this.activeSessionId = id
+      this.messages = session.messages
+      this.persistChatState()
+    },
+
+    deleteChat(id: string) {
+      this.sessions = this.sessions.filter(s => s.id !== id)
+      if (this.activeSessionId === id) {
+        this.activeSessionId = null
+        this.messages = []
+      }
+      this.persistChatState()
+    },
+
+    renameChat(id: string, name: string) {
+      const session = this.sessions.find(s => s.id === id)
+      if (!session) return
+      session.name = name
+      this.persistChatState()
+    },
+
+    /**
+     * Ensure there's an active session for the given project.
+     * If none exists, create one. If active session belongs to another project, switch.
+     */
+    ensureSessionForProject(projectId: string) {
+      const active = this.activeSessionId
+        ? this.sessions.find(s => s.id === this.activeSessionId)
+        : null
+
+      if (active && active.projectId === projectId) return
+
+      const existing = this.sessions
+        .filter(s => s.projectId === projectId)
+        .sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime())[0]
+
+      if (existing) {
+        this.switchChat(existing.id)
+      } else {
+        this.createChat(projectId)
       }
     },
   },

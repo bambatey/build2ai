@@ -25,7 +25,15 @@
 </template>
 
 <script setup lang="ts">
+import { useProjectStore } from '~/stores/project'
+
 const router = useRouter()
+const projectStore = useProjectStore()
+
+const startNew = () => {
+  projectStore.closeProject()
+  router.push({ path: '/workspace', query: { mode: 'new' } })
+}
 
 const quickActions = [
   {
@@ -34,19 +42,15 @@ const quickActions = [
     description: 'SAP2000, ETABS veya diğer analiz dosyalarını yükle',
     icon: 'lucide:upload',
     color: 'var(--accent-blue)',
-    onClick: () => {
-      router.push('/workspace')
-    },
+    onClick: startNew,
   },
   {
     id: 'new-session',
-    title: 'Yeni Oturum',
+    title: 'Yeni Proje',
     description: 'AI asistan ile yeni bir analiz oturumu başlat',
-    icon: 'lucide:message-circle',
+    icon: 'lucide:plus-circle',
     color: 'var(--accent-purple)',
-    onClick: () => {
-      router.push('/workspace')
-    },
+    onClick: startNew,
   },
   {
     id: 'template',

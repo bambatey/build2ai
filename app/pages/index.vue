@@ -83,10 +83,11 @@
         </div>
 
         <div class="projects-list">
-          <NuxtLink
+          <button
             v-for="project in recentProjects"
             :key="project.id"
-            :to="`/projects/${project.id}`"
+            type="button"
+            @click="handleOpenProject(project.id)"
             class="project-item"
           >
             <div class="project-icon">
@@ -103,7 +104,7 @@
             <div class="project-action">
               <Icon name="lucide:chevron-right" />
             </div>
-          </NuxtLink>
+          </button>
 
           <div v-if="recentProjects.length === 0" class="empty-state">
             <Icon name="lucide:inbox" />
@@ -175,6 +176,7 @@
 <script setup lang="ts">
 import { mockStats, mockProjects, mockSupportedPrograms, formatTimeAgo } from '~/utils/mockData'
 import { useAgentStore } from '~/stores/agent'
+import { useProjectStore } from '~/stores/project'
 
 definePageMeta({
   layout: 'default',
@@ -187,9 +189,15 @@ useSeoMeta({
 
 const router = useRouter()
 const agentStore = useAgentStore()
+const projectStore = useProjectStore()
 const stats = mockStats
 const recentProjects = mockProjects.slice(0, 5)
 const programs = mockSupportedPrograms
+
+const handleOpenProject = (id: string) => {
+  projectStore.openProject(id)
+  router.push('/workspace')
+}
 </script>
 
 <style scoped>
@@ -373,6 +381,12 @@ const programs = mockSupportedPrograms
   border: 1px solid transparent;
   text-decoration: none;
   transition: all 0.2s;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
 }
 
 .project-item:hover {
