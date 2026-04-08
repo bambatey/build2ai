@@ -11,7 +11,7 @@
       </div>
       <div v-if="!collapsed" class="trigger-info">
         <div class="trigger-label">PROJE</div>
-        <div class="trigger-name">{{ activeProject?.name ?? (isNewFlow ? 'Yeni Proje (kayıtsız)' : 'Proje seçin') }}</div>
+        <div class="trigger-name">{{ triggerName }}</div>
       </div>
       <Icon
         v-if="!collapsed"
@@ -103,6 +103,13 @@ const popoverEl = ref<HTMLElement | null>(null)
 const popoverStyle = ref<Record<string, string>>({})
 
 const activeProject = computed(() => projectStore.activeProject)
+
+const triggerName = computed(() => {
+  if (activeProject.value) return activeProject.value.name
+  if (projectStore.pendingNewProjectName) return projectStore.pendingNewProjectName
+  if (isNewFlow.value) return 'Yeni Proje (kayıtsız)'
+  return 'Proje seçin'
+})
 
 const filteredProjects = computed(() => {
   const q = search.value.trim().toLowerCase()

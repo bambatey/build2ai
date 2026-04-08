@@ -236,8 +236,7 @@ const closeUpload = () => {
 }
 
 const startNewProject = () => {
-  projectStore.closeProject()
-  router.push({ path: '/workspace', query: { mode: 'new' } })
+  projectStore.requestNewProject()
 }
 
 const handleUploadError = (msg: string) => {

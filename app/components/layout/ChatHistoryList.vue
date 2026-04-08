@@ -56,10 +56,14 @@ const sessions = computed(() => {
 })
 
 const handleNewChat = () => {
-  if (!projectStore.activeProjectId) return
-  chatStore.createChat(projectStore.activeProjectId)
-  if (router.currentRoute.value.path !== '/workspace') {
-    router.push('/workspace')
+  if (projectStore.activeProjectId) {
+    chatStore.createChat(projectStore.activeProjectId)
+    if (router.currentRoute.value.path !== '/workspace') {
+      router.push('/workspace')
+    }
+  } else {
+    // Aktif proje yok → yeni proje modalını aç
+    projectStore.requestNewProject()
   }
 }
 

@@ -111,9 +111,20 @@ watch(
   { immediate: false },
 )
 
+// Yeni proje akışına girince chat panelini temizle
+watch(
+  () => isNewMode.value,
+  (newVal) => {
+    if (newVal) {
+      chatStore.activeSessionId = null
+      chatStore.messages = []
+    }
+  },
+  { immediate: true },
+)
+
 const startNewProject = () => {
-  projectStore.closeProject()
-  router.push({ path: '/workspace', query: { mode: 'new' } })
+  projectStore.requestNewProject()
 }
 
 const handleSketchExport = (data: { image: string; shapes: any; prompt: string }) => {
@@ -159,11 +170,12 @@ const handleWindowResize = () => {
 onMounted(() => {
   // mockProjects'i store'a yükle (sayfa direkt açılırsa)
   mockProjects.forEach(p => projectStore.addProject(p))
-  projectStore.hydrate()
-  chatStore.hydrate()
 
-  // Aktif proje varsa session'ı garantile
-  if (projectStore.activeProjectId) {
+  // Yeni proje akışındaysak chat'i temiz tut, hydrate etme
+  if (isNewMode.value || projectStore.pendingNewProjectName) {
+    chatStore.activeSessionId = null
+    chatStore.messages = []
+  } else if (projectStore.activeProjectId) {
     chatStore.ensureSessionForProject(projectStore.activeProjectId)
   }
 

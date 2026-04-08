@@ -70,6 +70,9 @@ export const useProjectStore = defineStore('project', {
     originalContent: '',
     modifiedContent: '',
     changes: [] as Change[],
+    // Yeni proje akışı
+    isNewProjectModalOpen: false,
+    pendingNewProjectName: null as string | null,
   }),
 
   getters: {
@@ -181,6 +184,48 @@ export const useProjectStore = defineStore('project', {
     addProject(project: Project) {
       if (this.projects.find(p => p.id === project.id)) return
       this.projects.push(project)
+    },
+
+    requestNewProject() {
+      this.isNewProjectModalOpen = true
+    },
+
+    cancelNewProject() {
+      this.isNewProjectModalOpen = false
+    },
+
+    startNewProjectDraft(name: string) {
+      this.pendingNewProjectName = name.trim() || 'Yeni Proje'
+      this.isNewProjectModalOpen = false
+      // Aktif projeyi temizle ki workspace boş açılsın
+      this.activeProjectId = null
+      this.currentProject = null
+      this.files = []
+      this.currentFile = null
+      this.persistState()
+    },
+
+    /**
+     * Bekleyen taslak proje varsa, onu gerçek bir projeye çevirir
+     * ve aktif yapar. İlk mesaj gönderildiğinde çağrılır.
+     */
+    commitPendingProject(): Project | null {
+      if (!this.pendingNewProjectName) return null
+      const id = crypto.randomUUID()
+      const project: Project = {
+        id,
+        name: this.pendingNewProjectName,
+        format: '.s2k',
+        fileCount: 0,
+        lastModified: new Date(),
+        progress: 0,
+        tags: [],
+        files: [],
+      }
+      this.addProject(project)
+      this.openProject(id)
+      this.pendingNewProjectName = null
+      return project
     },
 
     deleteProject(id: string) {

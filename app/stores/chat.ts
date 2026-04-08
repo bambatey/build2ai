@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useProjectStore } from '~/stores/project'
 
 export interface ChatMessage {
   id: string
@@ -151,6 +152,15 @@ export const useChatStore = defineStore('chat', {
 
   actions: {
     async sendMessage(content: string) {
+      // Eğer bekleyen yeni proje taslağı varsa, önce onu kaydet
+      const projectStore = useProjectStore()
+      if (projectStore.pendingNewProjectName && !projectStore.activeProjectId) {
+        const project = projectStore.commitPendingProject()
+        if (project) {
+          this.createChat(project.id)
+        }
+      }
+
       // Kullanıcı mesajı ekle
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),

@@ -3,6 +3,9 @@
     <!-- Sidebar -->
     <LayoutAppSidebar />
 
+    <!-- Global modals -->
+    <LayoutNewProjectModal />
+
     <!-- Main Content -->
     <div class="main-content" :class="{ 'with-topbar': showTopBar }">
       <!-- Page Content -->

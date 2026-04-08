@@ -169,9 +169,7 @@ onMounted(() => {
 })
 
 const handleNewProject = () => {
-  // Aktif proje varsa kapat ki "yeni proje" akışı temiz başlasın
-  projectStore.closeProject()
-  router.push({ path: '/workspace', query: { mode: 'new' } })
+  projectStore.requestNewProject()
 }
 
 const handleOpenProject = (id: string) => {

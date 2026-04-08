@@ -175,9 +175,7 @@ const handleQuickCommand = (command: any) => {
   overflow-y: auto;
   padding: 1rem;
   scroll-behavior: smooth;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   min-width: 0;
 }
 
@@ -193,6 +191,7 @@ const handleQuickCommand = (command: any) => {
   justify-content: center;
   text-align: center;
   padding: 3rem 1.5rem;
+  min-height: 100%;
 }
 
 @media (min-width: 768px) {
