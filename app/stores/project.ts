@@ -10,6 +10,7 @@ export interface FileNode {
   lineCount?: number
   lastModified?: Date
   children?: FileNode[]
+  content?: string
 }
 
 export interface Project {

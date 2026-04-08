@@ -36,6 +36,20 @@
           Modele Dönüştür
         </button>
       </div>
+
+      <div class="toolbar-spacer" />
+
+      <div class="toolbar-group">
+        <button
+          @click="downloadActiveProject"
+          class="tool-btn download"
+          :disabled="!downloadableFile"
+          :title="downloadableFile ? `İndir: ${downloadableFile.name}` : 'İndirilebilir dosya yok'"
+        >
+          <Icon name="lucide:download" />
+          <span class="download-label">İndir</span>
+        </button>
+      </div>
     </div>
 
     <!-- Canvas Area -->
@@ -102,10 +116,44 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useProjectStore, type FileNode } from '~/stores/project'
 
 const emit = defineEmits<{
   export: [data: { image: string; shapes: any[]; prompt: string }]
 }>()
+
+const projectStore = useProjectStore()
+
+// Aktif projedeki içerik taşıyan ilk dosyayı bul
+const downloadableFile = computed<FileNode | null>(() => {
+  const proj = projectStore.activeProject
+  if (!proj) return null
+  const find = (nodes: FileNode[]): FileNode | null => {
+    for (const n of nodes) {
+      if (n.type === 'file' && n.content) return n
+      if (n.children) {
+        const f = find(n.children)
+        if (f) return f
+      }
+    }
+    return null
+  }
+  return find(proj.files)
+})
+
+const downloadActiveProject = () => {
+  const file = downloadableFile.value
+  if (!file?.content) return
+  const blob = new Blob([file.content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = file.name
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 // Prompt text
 const promptText = ref('')
@@ -440,6 +488,35 @@ const exportSketch = () => {
   height: 28px;
   background: var(--border-default);
   align-self: center;
+}
+
+.toolbar-spacer {
+  flex: 1;
+  min-width: 0.5rem;
+}
+
+.tool-btn.download {
+  width: auto;
+  padding: 0 0.875rem;
+  height: 36px;
+  gap: 0.4375rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.tool-btn.download:hover:not(:disabled) {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  color: white;
+}
+
+.download-label {
+  display: inline-block;
+}
+
+@media (max-width: 720px) {
+  .download-label { display: none; }
+  .tool-btn.download { width: 36px; padding: 0; }
 }
 
 .tool-btn {
