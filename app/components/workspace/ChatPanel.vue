@@ -196,7 +196,7 @@ const handleQuickCommand = (command: any) => {
 
 @media (min-width: 768px) {
   .welcome-message {
-    padding: 8rem 2rem;
+    padding: 2.5rem;
   }
 }
 

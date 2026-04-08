@@ -560,7 +560,7 @@ const exportSketch = () => {
   color: white;
   font-size: 0.875rem;
   font-weight: 500;
-  height: 38px;
+  height: 36px;
 }
 
 .tool-btn.primary:hover:not(:disabled) {
