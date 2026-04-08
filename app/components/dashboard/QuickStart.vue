@@ -22,6 +22,9 @@
       </button>
     </div>
 
+    <!-- Template Wizard -->
+    <DashboardTemplateWizardModal v-model="showTemplateWizard" />
+
     <!-- Upload Modal -->
     <Teleport to="body">
       <div v-if="showUpload" class="upload-modal-overlay" @click.self="closeUpload">
@@ -54,6 +57,7 @@ const router = useRouter()
 const projectStore = useProjectStore()
 
 const showUpload = ref(false)
+const showTemplateWizard = ref(false)
 const uploadError = ref('')
 
 const startNew = () => {
@@ -131,7 +135,7 @@ const quickActions = [
     icon: 'lucide:layout-template',
     color: 'var(--accent-green)',
     onClick: () => {
-      console.log('Şablon seç')
+      showTemplateWizard.value = true
     },
   },
 ]

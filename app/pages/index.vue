@@ -140,9 +140,9 @@
             </div>
           </button>
 
-          <button class="action-item">
+          <button type="button" @click="showTemplateWizard = true" class="action-item">
             <div class="action-icon">
-              <Icon name="lucide:file-text" />
+              <Icon name="lucide:layout-template" />
             </div>
             <div class="action-content">
               <div class="action-title">Şablon Seç</div>
@@ -170,6 +170,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Template Wizard -->
+    <DashboardTemplateWizardModal v-model="showTemplateWizard" />
 
     <!-- Upload Modal -->
     <Teleport to="body">
@@ -223,6 +226,7 @@ const handleOpenProject = (id: string) => {
 }
 
 const showUpload = ref(false)
+const showTemplateWizard = ref(false)
 const uploadError = ref('')
 
 const openUpload = () => {
