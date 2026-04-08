@@ -179,6 +179,12 @@ onMounted(() => {
     chatStore.ensureSessionForProject(projectStore.activeProjectId)
   }
 
+  // Canvas ve chat'i ortadan ikiye böl
+  if (typeof window !== 'undefined') {
+    const available = window.innerWidth - SIDEBAR_WIDTH - RESIZER_WIDTH
+    drawingWidth.value = Math.max(MIN_LEFT, Math.floor(available / 2))
+  }
+
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', stopResize)
   window.addEventListener('resize', handleWindowResize)

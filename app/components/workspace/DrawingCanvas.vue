@@ -33,7 +33,7 @@
         </button>
         <button @click="exportSketch" class="tool-btn primary" title="AI'ya Gönder">
           <Icon name="lucide:send" />
-          Modele Dönüştür
+          Attribute Ekle
         </button>
       </div>
 
