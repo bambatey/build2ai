@@ -25,13 +25,38 @@
     <!-- Açık proje akışı: canvas + chat (proje aktif) -->
     <div v-else-if="activeProject" class="workspace-content">
       <div class="workspace-panels">
-        <!-- Canvas / Drawing -->
+        <!-- Sol Panel (Canvas veya Advanced Options) -->
         <div
           ref="drawingPanel"
           class="drawing-panel"
           :style="{ flexBasis: `${drawingWidth}px`, maxWidth: `${drawingWidth}px` }"
         >
-          <WorkspaceDrawingCanvas @export="handleSketchExport" />
+          <div class="left-panel-content">
+            <WorkspaceDrawingCanvas v-if="leftView === 'canvas'" @export="handleSketchExport" />
+            <WorkspaceAdvancedOptions v-else />
+
+            <!-- Floating View Toggle -->
+            <div class="view-toggle floating">
+              <button
+                type="button"
+                class="toggle-btn"
+                :class="{ active: leftView === 'canvas' }"
+                title="Canvas"
+                @click="leftView = 'canvas'"
+              >
+                <Icon name="lucide:pen-tool" />
+              </button>
+              <button
+                type="button"
+                class="toggle-btn"
+                :class="{ active: leftView === 'advanced' }"
+                title="Gelişmiş Analizler"
+                @click="leftView = 'advanced'"
+              >
+                <Icon name="lucide:sliders-horizontal" />
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Resizer -->
@@ -90,6 +115,7 @@ const projectStore = useProjectStore()
 
 const isNewMode = computed(() => route.query.mode === 'new')
 const activeProject = computed(() => projectStore.activeProject)
+const leftView = ref<'canvas' | 'advanced'>('canvas')
 
 // Panel widths
 const drawingWidth = ref(700)
@@ -226,6 +252,63 @@ onBeforeUnmount(() => {
   height: 100%;
   flex-grow: 0;
   flex-shrink: 1;
+  position: relative;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.view-toggle.floating {
+  position: absolute;
+  bottom: 82px;
+  right: 8px;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.left-panel-content {
+  position: relative;
+  height: 100%;
+}
+
+.toggle-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggle-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.toggle-btn.active {
+  background: var(--accent-blue);
+  color: white;
+}
+
+.toggle-btn :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.left-panel-content {
+  height: 100%;
+  overflow: hidden;
 }
 
 .chat-panel {
