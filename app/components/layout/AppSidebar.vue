@@ -101,7 +101,14 @@ const navItems = [
   { path: '/settings', label: 'Ayarlar', icon: 'lucide:settings' },
 ]
 
-const hasActiveProject = computed(() => !!projectStore.activeProjectId)
+const isWorkspace = computed(() => route.path === '/workspace')
+const isNewProjectFlow = computed(
+  () => isWorkspace.value && route.query.mode === 'new',
+)
+// Mod B yalnızca workspace içindeyken anlamlı
+const hasActiveProject = computed(
+  () => isWorkspace.value && (!!projectStore.activeProjectId || isNewProjectFlow.value),
+)
 const recentProjects = computed(() => projectStore.recentProjects)
 
 const isActiveRoute = (path: string) => {

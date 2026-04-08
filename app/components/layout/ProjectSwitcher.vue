@@ -11,7 +11,7 @@
       </div>
       <div v-if="!collapsed" class="trigger-info">
         <div class="trigger-label">PROJE</div>
-        <div class="trigger-name">{{ activeProject?.name ?? 'Proje seçin' }}</div>
+        <div class="trigger-name">{{ activeProject?.name ?? (isNewFlow ? 'Yeni Proje (kayıtsız)' : 'Proje seçin') }}</div>
       </div>
       <Icon
         v-if="!collapsed"
@@ -83,13 +83,18 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useProjectStore } from '~/stores/project'
 
 const props = defineProps<{ collapsed?: boolean }>()
 
 const router = useRouter()
+const route = useRoute()
 const projectStore = useProjectStore()
+
+const isNewFlow = computed(
+  () => route.path === '/workspace' && route.query.mode === 'new',
+)
 
 const isOpen = ref(false)
 const search = ref('')

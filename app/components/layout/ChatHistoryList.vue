@@ -8,7 +8,10 @@
     </div>
 
     <div class="history-list">
-      <div v-if="sessions.length === 0" class="history-empty">
+      <div v-if="!projectStore.activeProjectId" class="history-empty">
+        Sohbetler proje kaydedildikten sonra burada görünür.
+      </div>
+      <div v-else-if="sessions.length === 0" class="history-empty">
         Henüz sohbet yok
       </div>
 
