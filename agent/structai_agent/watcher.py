@@ -29,6 +29,7 @@ class FolderWatcher:
         self._observer = None
         self._lock = threading.Lock()
         self._subscribers: list[Queue[dict]] = []
+        self._listeners: list = []
 
     @property
     def available(self) -> bool:
@@ -71,16 +72,36 @@ class FolderWatcher:
 
     # ---- internals -----------------------------------------------------
 
+    def add_event_listener(self, fn) -> None:
+        """Register an in-process callback for filesystem events.
+
+        Listeners run synchronously inside the watcher thread, so keep
+        the work tiny — typically just enqueue a job for later.
+        """
+        with self._lock:
+            self._listeners.append(fn)
+
+    def broadcast(self, event: dict) -> None:
+        """Public alias so other agent modules can push events through."""
+        self._broadcast(event)
+
     def _broadcast(self, event: dict) -> None:
         with self._lock:
-            for q in list(self._subscribers):
-                if q.full():
-                    # Drop the oldest event so slow clients don't stall us.
-                    try:
-                        q.get_nowait()
-                    except Empty:
-                        pass
-                q.put_nowait(event)
+            subs = list(self._subscribers)
+            listeners = list(self._listeners)
+        for q in subs:
+            if q.full():
+                # Drop the oldest event so slow clients don't stall us.
+                try:
+                    q.get_nowait()
+                except Empty:
+                    pass
+            q.put_nowait(event)
+        for fn in listeners:
+            try:
+                fn(event)
+            except Exception:  # pragma: no cover
+                pass
 
     def _start_locked(self) -> None:
         if not _WATCHDOG_AVAILABLE or self._root is None:

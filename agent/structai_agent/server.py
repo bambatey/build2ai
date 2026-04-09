@@ -17,14 +17,17 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__
+from . import __version__, sap_oapi
 from .config import AgentConfig, env_host, env_port
 from .fs import FsError, delete_file, list_tree, read_file, write_file
+from .jobs import Job, JobRunner, S2K_SUBFOLDER
 from .watcher import FolderWatcher
 
 LOG = logging.getLogger("structai_agent")
@@ -42,13 +45,134 @@ _LOCALHOST_ORIGIN = re.compile(
 def _origin_allowed(origin: str | None) -> bool:
     return bool(origin and _LOCALHOST_ORIGIN.match(origin))
 
+def _ctx_trace(msg: str) -> None:
+    import os
+    p = os.path.join(os.environ.get("TEMP", os.path.expanduser("~")), "structai-agent-trace.log")
+    try:
+        with open(p, "a", encoding="utf-8") as fh:
+            fh.write(f"[ctx] {msg}\n")
+    except OSError:
+        pass
+
+
 class _Context:
     """Shared agent state attached to the HTTP server instance."""
 
     def __init__(self) -> None:
+        _ctx_trace("loading config")
         self.config = AgentConfig.load()
+        _ctx_trace(f"config root={self.config.root}")
+        _ctx_trace("creating watcher")
         self.watcher = FolderWatcher()
+        _ctx_trace("creating job runner")
+        self.jobs = JobRunner(on_status=self._on_jobs_status)
+        _ctx_trace("starting job runner")
+        self.jobs.start()
+        _ctx_trace("hooking watcher listener")
+        self.watcher.add_event_listener(self._on_fs_event)
+        _ctx_trace("setting watcher root")
         self.watcher.set_root(self.config.root)
+        _ctx_trace("scanning existing sdb")
+        self._scan_existing_sdb()
+        _ctx_trace("context init done")
+
+    # ---- helpers -------------------------------------------------------
+
+    def s2k_dir(self) -> Path | None:
+        if not self.config.root:
+            return None
+        return Path(self.config.root) / S2K_SUBFOLDER
+
+    def _on_jobs_status(self, status: dict) -> None:
+        # Push job activity to anyone subscribed to the SSE stream so the
+        # web UI can show a "converting..." indicator without polling.
+        self.watcher.broadcast({"type": "jobs", "status": status, "ts": time.time()})
+
+    def _on_fs_event(self, event: dict) -> None:
+        path = event.get("path")
+        if not path or not self.config.root:
+            return
+        root = Path(self.config.root)
+        abs_path = (root / path).resolve()
+
+        # Ignore anything generated inside our s2k subfolder so we don't
+        # create infinite conversion loops when sap_oapi writes its
+        # output back to disk.
+        try:
+            abs_path.relative_to((root / S2K_SUBFOLDER).resolve())
+            return
+        except ValueError:
+            pass
+
+        kind = event.get("type")
+        suffix = abs_path.suffix.lower()
+        if suffix == ".sdb" and kind in ("created", "modified", "moved"):
+            self._enqueue_sdb_to_s2k(abs_path)
+
+    def _enqueue_sdb_to_s2k(self, sdb_path: Path) -> None:
+        _ctx_trace(f"_enqueue_sdb_to_s2k({sdb_path.name})")
+        s2k_dir = self.s2k_dir()
+        if s2k_dir is None:
+            return
+        try:
+            s2k_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            _ctx_trace(f"mkdir failed: {exc}")
+            return
+        target = s2k_dir / (sdb_path.stem + ".s2k")
+        # Skip if the .s2k is already newer than the .sdb (e.g. we just
+        # produced it ourselves a moment ago).
+        try:
+            if target.exists() and target.stat().st_mtime >= sdb_path.stat().st_mtime:
+                _ctx_trace("up to date, skipping")
+                return
+        except OSError:
+            pass
+        self.jobs.enqueue(Job(kind="sdb-to-s2k", src=sdb_path, dst=target))
+
+    def _enqueue_s2k_to_sdb(self, s2k_path: Path) -> None:
+        if not self.config.root:
+            return
+        root = Path(self.config.root)
+        target = root / (s2k_path.stem + ".sdb")
+        self.jobs.enqueue(Job(kind="s2k-to-sdb", src=s2k_path, dst=target))
+
+    def _scan_existing_sdb(self) -> None:
+        if not self.config.root:
+            return
+        root = Path(self.config.root)
+        _ctx_trace(f"scan root={root}")
+        try:
+            if not root.is_dir():
+                _ctx_trace("not a dir")
+                return
+        except OSError as exc:
+            _ctx_trace(f"is_dir failed: {exc}")
+            return
+        # Run the scan on a worker thread so a slow OneDrive folder
+        # never blocks UI startup.
+        threading.Thread(
+            target=self._scan_existing_sdb_blocking,
+            args=(root,),
+            name="structai-scan",
+            daemon=True,
+        ).start()
+        _ctx_trace("scan dispatched")
+
+    def _scan_existing_sdb_blocking(self, root: Path) -> None:
+        try:
+            for sdb in root.glob("*.sdb"):
+                _ctx_trace(f"found sdb: {sdb.name}")
+                self._enqueue_sdb_to_s2k(sdb)
+            _ctx_trace("scan finished")
+        except OSError as exc:
+            _ctx_trace(f"scan error: {exc}")
+
+    def shutdown(self) -> None:
+        try:
+            self.jobs.stop()
+        finally:
+            self.watcher.set_root(None)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -137,6 +261,17 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/events":
                 return self._stream_events()
 
+            if path == "/sap":
+                status = sap_oapi.probe()
+                return self._send_json(
+                    {
+                        "available": status.available,
+                        "reason": status.reason,
+                        "version": status.version,
+                        "jobs": self.ctx.jobs.status(),
+                    }
+                )
+
             self._send_error(404, f"Unknown route: {path}")
         except FsError as exc:
             self._send_error(exc.status, str(exc))
@@ -178,6 +313,18 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(rel, str) or not isinstance(content, str):
                     raise FsError("'path' and 'content' must be strings")
                 entry = write_file(self.ctx.config.root, rel, content)
+
+                # If we just wrote a .s2k inside the s2k/ subfolder, queue
+                # the reverse SAP2000 conversion so the .sdb beside it
+                # stays in sync.
+                if (
+                    entry.path.startswith(f"{S2K_SUBFOLDER}/")
+                    and entry.path.lower().endswith(".s2k")
+                    and self.ctx.config.root
+                ):
+                    s2k_abs = Path(self.ctx.config.root) / entry.path
+                    self.ctx._enqueue_s2k_to_sdb(s2k_abs)
+
                 return self._send_json({"file": entry.__dict__})
 
             self._send_error(404, f"Unknown route: {url.path}")
@@ -272,6 +419,7 @@ class AgentServer:
         self.ctx.config.root = root or None
         self.ctx.config.save()
         self.ctx.watcher.set_root(self.ctx.config.root)
+        self.ctx._scan_existing_sdb()
         self._log(f"Root set to: {self.ctx.config.root or '(none)'}")
 
     def start(self) -> None:
@@ -303,7 +451,7 @@ class AgentServer:
                 self._log(f"Shutdown error: {exc}")
         if self._thread is not None:
             self._thread.join(timeout=3)
-        self.ctx.watcher.set_root(None)
+        self.ctx.shutdown()
         self._server = None
         self._thread = None
         self._log("Agent stopped")

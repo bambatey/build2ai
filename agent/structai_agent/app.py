@@ -23,7 +23,7 @@ from typing import Callable
 
 import customtkinter as ctk
 
-from . import __version__, autostart
+from . import __version__, autostart, sap_oapi
 from .server import AgentServer
 
 ASSETS = Path(__file__).resolve().parent / "assets"
@@ -36,16 +36,22 @@ LOG_LIMIT = 200
 
 class AgentApp:
     def __init__(self, start_in_tray: bool = False) -> None:
+        _trace(f"AgentApp.__init__ start_in_tray={start_in_tray}")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
+        _trace("ctk theme set")
 
+        _trace("creating AgentServer")
         self.server = AgentServer()
+        _trace("AgentServer created")
         self.server.add_listener(self._on_log)
         self._log_buffer: deque[str] = deque(maxlen=LOG_LIMIT)
         self._tray = None
         self._tray_thread: threading.Thread | None = None
 
+        _trace("creating CTk root")
         self.root = ctk.CTk()
+        _trace("CTk root created")
         self.root.title("StructAI Agent")
         self.root.geometry("560x560")
         self.root.minsize(520, 520)
@@ -58,17 +64,29 @@ class AgentApp:
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        _trace("ui built, starting server")
         # Try starting the server immediately so the user lands on a
         # working state. Failures are reported in the log panel.
         try:
             self.server.start()
+            _trace("server.start ok")
         except OSError as exc:
+            _trace(f"server.start FAILED: {exc}")
             messagebox.showerror("StructAI Agent", f"Port already in use:\n{exc}")
         self._refresh_status()
         self._refresh_root_label()
+        # SAP2000 probe runs on a worker thread because instantiating the
+        # COM object the first time can take a couple of seconds.
+        self._refresh_sap_status()
 
         if start_in_tray:
-            self.root.after(50, self._minimise_to_tray)
+            # Defer the minimise so the window is fully constructed first;
+            # if the tray subsystem fails, _start_tray will reopen us.
+            self.root.after(200, self._minimise_to_tray)
+        else:
+            # Force-show on startup so we never end up with an invisible
+            # process when launched manually.
+            self.root.after(50, self._show_window)
 
     # ---- UI construction ------------------------------------------------
 
@@ -179,6 +197,40 @@ class AgentApp:
             hover_color="#4b5563",
         ).pack(side="left", padx=(8, 0))
 
+        # SAP2000 status
+        sap_card = ctk.CTkFrame(self.root, corner_radius=10)
+        sap_card.pack(fill="x", padx=20, pady=8)
+
+        sap_row = ctk.CTkFrame(sap_card, fg_color="transparent")
+        sap_row.pack(fill="x", padx=16, pady=14)
+
+        self.sap_dot = ctk.CTkLabel(
+            sap_row, text="●", font=ctk.CTkFont(size=14), text_color="#9ca3af"
+        )
+        self.sap_dot.pack(side="left")
+        ctk.CTkLabel(
+            sap_row,
+            text="SAP2000 OAPI",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).pack(side="left", padx=(6, 8))
+        self.sap_label = ctk.CTkLabel(
+            sap_row,
+            text="kontrol ediliyor...",
+            font=ctk.CTkFont(size=11),
+            text_color="#9ca3af",
+        )
+        self.sap_label.pack(side="left")
+        ctk.CTkButton(
+            sap_row,
+            text="Yeniden dene",
+            width=100,
+            height=24,
+            command=lambda: self._refresh_sap_status(force=True),
+            fg_color="#374151",
+            hover_color="#4b5563",
+            font=ctk.CTkFont(size=11),
+        ).pack(side="right")
+
         # Settings
         settings_card = ctk.CTkFrame(self.root, corner_radius=10)
         settings_card.pack(fill="x", padx=20, pady=8)
@@ -265,6 +317,33 @@ class AgentApp:
     def _refresh_root_label(self) -> None:
         self.folder_label.configure(text=self.server.root or "(seçilmedi)")
 
+    def _refresh_sap_status(self, force: bool = False) -> None:
+        self.sap_label.configure(text="kontrol ediliyor...")
+        self.sap_dot.configure(text_color="#f59e0b")
+
+        def _probe():
+            sap_oapi.init_thread()
+            try:
+                status = sap_oapi.probe(force=force)
+            finally:
+                sap_oapi.shutdown_thread()
+            self.root.after(0, lambda: self._apply_sap_status(status))
+
+        threading.Thread(target=_probe, daemon=True).start()
+
+    def _apply_sap_status(self, status) -> None:
+        if status.available:
+            self.sap_dot.configure(text_color="#10b981")
+            label = "açık SAP2000'e bağlandı"
+            if status.version:
+                label += f" · v{status.version}"
+            self.sap_label.configure(text=label)
+        else:
+            self.sap_dot.configure(text_color="#ef4444")
+            self.sap_label.configure(
+                text=status.reason or "SAP2000 açık değil"
+            )
+
     def _on_log(self, message: str) -> None:
         self._log_buffer.append(message)
         # Tk widgets must be touched on the main thread.
@@ -293,14 +372,16 @@ class AgentApp:
         try:
             import pystray
             from PIL import Image
-        except ImportError:
-            # No tray support — just hide the window. The user can bring
-            # it back via Task Manager / re-launching the exe.
-            self._on_log("pystray not installed; tray disabled")
+        except Exception as exc:
+            # No tray support — bring the window back so the user isn't
+            # stuck with an invisible process.
+            self._on_log(f"pystray import failed ({exc}); tray disabled")
+            self._show_window()
             return
 
         if not ICON_PNG.exists():
-            self._on_log("Tray icon missing")
+            self._on_log(f"Tray icon missing at {ICON_PNG}")
+            self._show_window()
             return
 
         image = Image.open(ICON_PNG)
@@ -359,10 +440,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _trace(msg: str) -> None:
+    import os
+    p = os.path.join(
+        os.environ.get("TEMP", os.path.expanduser("~")),
+        "structai-agent-trace.log",
+    )
+    try:
+        with open(p, "a", encoding="utf-8") as fh:
+            fh.write(f"[app] {msg}\n")
+    except OSError:
+        pass
+
+
 def main() -> None:
+    _trace("parsing args")
     args = parse_args(sys.argv[1:])
+    _trace(f"args={args}")
+    _trace("constructing AgentApp")
     app = AgentApp(start_in_tray=args.tray)
+    _trace("entering mainloop")
     app.run()
+    _trace("mainloop returned")
 
 
 if __name__ == "__main__":
