@@ -35,6 +35,31 @@ export interface Change {
 
 const STORAGE_KEY = 'structai:project-state'
 
+/**
+ * Create a minimal but valid SAP2000 .s2k text with empty geometry tables.
+ * Used as the starting file for newly created projects.
+ */
+function createEmptyS2K(projectName: string): string {
+  return [
+    `$ File: ${projectName}.s2k`,
+    '$ Program: SAP2000',
+    '$ Version: 26.0.0',
+    '$ Units: kN, m, C',
+    '',
+    'TABLE:  "PROGRAM INFORMATION"',
+    '   ProgramName=SAP2000   Version=26.0.0',
+    '',
+    'TABLE:  "JOINT COORDINATES"',
+    '',
+    'TABLE:  "CONNECTIVITY - FRAME"',
+    '',
+    'TABLE:  "CONNECTIVITY - AREA"',
+    '',
+    'END TABLE DATA',
+    '',
+  ].join('\n')
+}
+
 interface PersistedState {
   activeProjectId: string | null
   recentProjectIds: string[]
@@ -213,15 +238,28 @@ export const useProjectStore = defineStore('project', {
     commitPendingProject(): Project | null {
       if (!this.pendingNewProjectName) return null
       const id = crypto.randomUUID()
+      const name = this.pendingNewProjectName
+      const fileName = `${name}.s2k`
       const project: Project = {
         id,
-        name: this.pendingNewProjectName,
+        name,
         format: '.s2k',
-        fileCount: 0,
+        fileCount: 1,
         lastModified: new Date(),
         progress: 0,
         tags: [],
-        files: [],
+        files: [
+          {
+            id: crypto.randomUUID(),
+            name: fileName,
+            type: 'file',
+            path: `/${name}/${fileName}`,
+            format: '.s2k',
+            size: 0,
+            lastModified: new Date(),
+            content: createEmptyS2K(name),
+          },
+        ],
       }
       this.addProject(project)
       this.openProject(id)

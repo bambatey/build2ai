@@ -1,29 +1,7 @@
 <template>
   <div class="workspace-page">
-    <!-- Yeni proje akışı: çizim + chat -->
-    <div v-if="isNewMode" class="workspace-content">
-      <div class="workspace-panels">
-        <!-- Drawing Panel -->
-        <div
-          ref="drawingPanel"
-          class="drawing-panel"
-          :style="{ flexBasis: `${drawingWidth}px`, maxWidth: `${drawingWidth}px` }"
-        >
-          <WorkspaceDrawingCanvas @export="handleSketchExport" />
-        </div>
-
-        <!-- Resizer -->
-        <div class="panel-resizer" @mousedown="startResize($event)" />
-
-        <!-- Chat Panel -->
-        <div class="chat-panel">
-          <WorkspaceChatPanel />
-        </div>
-      </div>
-    </div>
-
-    <!-- Açık proje akışı: canvas + chat (proje aktif) -->
-    <div v-else-if="activeProject" class="workspace-content">
+    <!-- Aktif proje: canvas/advanced/3d + chat -->
+    <div v-if="activeProject" class="workspace-content">
       <div class="workspace-panels">
         <!-- Sol Panel (Canvas veya Advanced Options) -->
         <div

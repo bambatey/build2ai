@@ -66,11 +66,17 @@ const cancel = () => {
 
 const confirm = () => {
   if (!name.value.trim()) return
+  // Taslak yarat ve hemen kaydet (boş .s2k ile)
   projectStore.startNewProjectDraft(name.value)
-  // Chat panelini sıfırla
+  const project = projectStore.commitPendingProject()
+  // Chat panelini sıfırla ve yeni proje için boş bir oturum aç
   chatStore.activeSessionId = null
   chatStore.messages = []
-  router.push({ path: '/workspace', query: { mode: 'new' } })
+  if (project) {
+    chatStore.createChat(project.id)
+  }
+  projectStore.cancelNewProject()
+  router.push('/workspace')
 }
 </script>
 
