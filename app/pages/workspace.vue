@@ -33,7 +33,8 @@
         >
           <div class="left-panel-content">
             <WorkspaceDrawingCanvas v-if="leftView === 'canvas'" @export="handleSketchExport" />
-            <WorkspaceAdvancedOptions v-else />
+            <WorkspaceAdvancedOptions v-else-if="leftView === 'advanced'" />
+            <WorkspaceModel3DPreview v-else-if="leftView === '3d'" />
 
             <!-- Floating View Toggle -->
             <div class="view-toggle floating">
@@ -54,6 +55,15 @@
                 @click="leftView = 'advanced'"
               >
                 <Icon name="lucide:sliders-horizontal" />
+              </button>
+              <button
+                type="button"
+                class="toggle-btn"
+                :class="{ active: leftView === '3d' }"
+                title="3D Önizleme"
+                @click="leftView = '3d'"
+              >
+                <Icon name="lucide:box" />
               </button>
             </div>
           </div>
@@ -97,7 +107,6 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useChatStore } from '~/stores/chat'
 import { useProjectStore } from '~/stores/project'
-import { mockProjects } from '~/utils/mockData'
 
 definePageMeta({
   layout: 'default',
@@ -115,7 +124,7 @@ const projectStore = useProjectStore()
 
 const isNewMode = computed(() => route.query.mode === 'new')
 const activeProject = computed(() => projectStore.activeProject)
-const leftView = ref<'canvas' | 'advanced'>('canvas')
+const leftView = ref<'canvas' | 'advanced' | '3d'>('canvas')
 
 // Panel widths
 const drawingWidth = ref(700)
@@ -194,9 +203,6 @@ const handleWindowResize = () => {
 }
 
 onMounted(() => {
-  // mockProjects'i store'a yükle (sayfa direkt açılırsa)
-  mockProjects.forEach(p => projectStore.addProject(p))
-
   // Yeni proje akışındaysak chat'i temiz tut, hydrate etme
   if (isNewMode.value || projectStore.pendingNewProjectName) {
     chatStore.activeSessionId = null

@@ -106,7 +106,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useProjectStore } from '~/stores/project'
-import { mockProjects, formatTimeAgo } from '~/utils/mockData'
+import { formatTimeAgo } from '~/utils/mockData'
 
 definePageMeta({
   layout: 'default',
@@ -162,9 +162,6 @@ const getProgressColor = (progress: number) => {
 }
 
 onMounted(() => {
-  mockProjects.forEach(project => {
-    projectStore.addProject(project)
-  })
   projectStore.hydrate()
 })
 

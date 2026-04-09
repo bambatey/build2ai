@@ -1,5 +1,3 @@
-import type { Project, FileNode } from '~/stores/project'
-
 // SAP2000 örnek dosya içeriği (gerçekçi format)
 export const mockSAP2000Content = `$ File: Bina_Model_v3.s2k
 $ Program: SAP2000
@@ -35,71 +33,6 @@ TABLE:  "FRAME SECTION PROPERTIES 01 - GENERAL"
 
 END TABLE DATA
 `
-
-// Mock projeler
-export const mockProjects: Project[] = [
-  {
-    id: '1',
-    name: 'Bina_Model_v3',
-    format: '.s2k',
-    fileCount: 3,
-    lastModified: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    progress: 78,
-    tags: ['deprem', 'çelik', 'TBDY2018'],
-    files: [
-      {
-        id: 'f1',
-        name: 'model.s2k',
-        type: 'file',
-        path: '/Bina_Model_v3/model.s2k',
-        format: '.s2k',
-        size: 245000,
-        lineCount: 3847,
-        lastModified: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Köprü_Analiz_Final',
-    format: '.r3d',
-    fileCount: 5,
-    lastModified: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    progress: 100,
-    tags: ['köprü', 'betonarme', 'eurocode'],
-    files: [],
-  },
-  {
-    id: '3',
-    name: 'Fabrika_Çelik_Yapı',
-    format: '.std',
-    fileCount: 2,
-    lastModified: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    progress: 45,
-    tags: ['çelik', 'endüstriyel'],
-    files: [],
-  },
-  {
-    id: '4',
-    name: 'Deprem_Kontrol_2024',
-    format: '.s2k',
-    fileCount: 4,
-    lastModified: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    progress: 92,
-    tags: ['deprem', 'tbdy2018'],
-    files: [],
-  },
-  {
-    id: '5',
-    name: 'AVM_Karkas_Sistem',
-    format: '.e2k',
-    fileCount: 6,
-    lastModified: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-    progress: 65,
-    tags: ['betonarme', 'ticari'],
-    files: [],
-  },
-]
 
 // Mock desteklenen programlar
 export const mockSupportedPrograms = [

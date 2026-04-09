@@ -45,14 +45,14 @@
 </template>
 
 <script setup lang="ts">
-import { mockProjects, formatTimeAgo } from '~/utils/mockData'
+import { computed } from 'vue'
+import { formatTimeAgo } from '~/utils/mockData'
 import { useProjectStore } from '~/stores/project'
 
 const router = useRouter()
 const projectStore = useProjectStore()
 
-// Son 5 projeyi göster
-const projects = mockProjects.slice(0, 5)
+const projects = computed(() => projectStore.recentProjects.slice(0, 5))
 
 const handleOpen = (id: string) => {
   projectStore.openProject(id)

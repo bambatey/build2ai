@@ -198,8 +198,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { mockStats, mockProjects, mockSupportedPrograms, formatTimeAgo } from '~/utils/mockData'
+import { ref, computed, onMounted } from 'vue'
+import { mockStats, mockSupportedPrograms, formatTimeAgo } from '~/utils/mockData'
 import { useAgentStore } from '~/stores/agent'
 import { useProjectStore } from '~/stores/project'
 import type { Project } from '~/stores/project'
@@ -217,8 +217,12 @@ const router = useRouter()
 const agentStore = useAgentStore()
 const projectStore = useProjectStore()
 const stats = mockStats
-const recentProjects = mockProjects.slice(0, 5)
+const recentProjects = computed(() => projectStore.recentProjects.slice(0, 5))
 const programs = mockSupportedPrograms
+
+onMounted(() => {
+  projectStore.hydrate()
+})
 
 const handleOpenProject = (id: string) => {
   projectStore.openProject(id)
@@ -247,10 +251,19 @@ const handleUploadError = (msg: string) => {
   uploadError.value = msg
 }
 
-const handleFileSelected = (file: File) => {
+const handleFileSelected = async (file: File) => {
   const ext = '.' + (file.name.split('.').pop()?.toLowerCase() ?? '')
   const baseName = file.name.replace(/\.[^.]+$/, '')
   const id = crypto.randomUUID()
+
+  // Dosya içeriğini text olarak oku — 3D preview ve parser bunu kullanacak
+  let content = ''
+  try {
+    content = await file.text()
+  } catch (e) {
+    uploadError.value = 'Dosya okunamadı'
+    return
+  }
 
   const project: Project = {
     id,
@@ -269,6 +282,7 @@ const handleFileSelected = (file: File) => {
         format: ext,
         size: file.size,
         lastModified: new Date(),
+        content,
       },
     ],
   }

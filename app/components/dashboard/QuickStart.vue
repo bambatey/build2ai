@@ -79,10 +79,18 @@ const handleUploadError = (msg: string) => {
   uploadError.value = msg
 }
 
-const handleFileSelected = (file: File) => {
+const handleFileSelected = async (file: File) => {
   const ext = '.' + (file.name.split('.').pop()?.toLowerCase() ?? '')
   const baseName = file.name.replace(/\.[^.]+$/, '')
   const id = crypto.randomUUID()
+
+  let content = ''
+  try {
+    content = await file.text()
+  } catch {
+    uploadError.value = 'Dosya okunamadı'
+    return
+  }
 
   const project: Project = {
     id,
@@ -101,6 +109,7 @@ const handleFileSelected = (file: File) => {
         format: ext,
         size: file.size,
         lastModified: new Date(),
+        content,
       },
     ],
   }

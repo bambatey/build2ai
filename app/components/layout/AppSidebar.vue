@@ -86,7 +86,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAgentStore } from '~/stores/agent'
 import { useProjectStore } from '~/stores/project'
 import { useChatStore } from '~/stores/chat'
-import { mockProjects } from '~/utils/mockData'
 
 const route = useRoute()
 const router = useRouter()
@@ -126,8 +125,6 @@ const handleOpenRecent = (id: string) => {
 }
 
 onMounted(() => {
-  // Store'u senkronla
-  mockProjects.forEach(p => projectStore.addProject(p))
   projectStore.hydrate()
   chatStore.hydrate()
 })
