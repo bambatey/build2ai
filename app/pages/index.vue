@@ -202,7 +202,8 @@ import { ref, computed, onMounted } from 'vue'
 import { mockStats, mockSupportedPrograms, formatTimeAgo } from '~/utils/mockData'
 import { useAgentStore } from '~/stores/agent'
 import { useProjectStore } from '~/stores/project'
-import type { Project } from '~/stores/project'
+import { useAgent } from '~/composables/useAgent'
+import { createProjectFromUpload } from '~/utils/projectFromUpload'
 
 definePageMeta({
   layout: 'default',
@@ -216,6 +217,7 @@ useSeoMeta({
 const router = useRouter()
 const agentStore = useAgentStore()
 const projectStore = useProjectStore()
+const agent = useAgent()
 const stats = mockStats
 const recentProjects = computed(() => projectStore.recentProjects.slice(0, 5))
 const programs = mockSupportedPrograms
@@ -252,45 +254,12 @@ const handleUploadError = (msg: string) => {
 }
 
 const handleFileSelected = async (file: File) => {
-  const ext = '.' + (file.name.split('.').pop()?.toLowerCase() ?? '')
-  const baseName = file.name.replace(/\.[^.]+$/, '')
-  const id = crypto.randomUUID()
-
-  // Dosya içeriğini text olarak oku — 3D preview ve parser bunu kullanacak
-  let content = ''
   try {
-    content = await file.text()
-  } catch (e) {
-    uploadError.value = 'Dosya okunamadı'
-    return
+    await createProjectFromUpload(file, { projectStore, agent, router })
+    closeUpload()
+  } catch (err: any) {
+    uploadError.value = err?.message ?? 'Dosya işlenemedi'
   }
-
-  const project: Project = {
-    id,
-    name: baseName,
-    format: ext,
-    fileCount: 1,
-    lastModified: new Date(),
-    progress: 0,
-    tags: [],
-    files: [
-      {
-        id: crypto.randomUUID(),
-        name: file.name,
-        type: 'file',
-        path: `/${baseName}/${file.name}`,
-        format: ext,
-        size: file.size,
-        lastModified: new Date(),
-        content,
-      },
-    ],
-  }
-
-  projectStore.addProject(project)
-  projectStore.openProject(id)
-  closeUpload()
-  router.push('/workspace')
 }
 </script>
 

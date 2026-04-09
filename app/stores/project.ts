@@ -235,11 +235,14 @@ export const useProjectStore = defineStore('project', {
      * Bekleyen taslak proje varsa, onu gerçek bir projeye çevirir
      * ve aktif yapar. İlk mesaj gönderildiğinde çağrılır.
      */
-    commitPendingProject(): Project | null {
+    commitPendingProject(opts?: { storedAt?: string }): Project | null {
       if (!this.pendingNewProjectName) return null
       const id = crypto.randomUUID()
       const name = this.pendingNewProjectName
       const fileName = `${name}.s2k`
+      const localPath = opts?.storedAt
+        ? `agent://${opts.storedAt}`
+        : `/${name}/${fileName}`
       const project: Project = {
         id,
         name,
@@ -247,13 +250,13 @@ export const useProjectStore = defineStore('project', {
         fileCount: 1,
         lastModified: new Date(),
         progress: 0,
-        tags: [],
+        tags: opts?.storedAt ? ['yerel'] : [],
         files: [
           {
             id: crypto.randomUUID(),
             name: fileName,
             type: 'file',
-            path: `/${name}/${fileName}`,
+            path: localPath,
             format: '.s2k',
             size: 0,
             lastModified: new Date(),

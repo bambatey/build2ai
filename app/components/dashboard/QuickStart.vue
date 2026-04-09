@@ -51,10 +51,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useProjectStore } from '~/stores/project'
-import type { Project } from '~/stores/project'
+import { useAgent } from '~/composables/useAgent'
+import { createProjectFromUpload } from '~/utils/projectFromUpload'
 
 const router = useRouter()
 const projectStore = useProjectStore()
+const agent = useAgent()
 
 const showUpload = ref(false)
 const showTemplateWizard = ref(false)
@@ -80,44 +82,12 @@ const handleUploadError = (msg: string) => {
 }
 
 const handleFileSelected = async (file: File) => {
-  const ext = '.' + (file.name.split('.').pop()?.toLowerCase() ?? '')
-  const baseName = file.name.replace(/\.[^.]+$/, '')
-  const id = crypto.randomUUID()
-
-  let content = ''
   try {
-    content = await file.text()
-  } catch {
-    uploadError.value = 'Dosya okunamadı'
-    return
+    await createProjectFromUpload(file, { projectStore, agent, router })
+    closeUpload()
+  } catch (err: any) {
+    uploadError.value = err?.message ?? 'Dosya işlenemedi'
   }
-
-  const project: Project = {
-    id,
-    name: baseName,
-    format: ext,
-    fileCount: 1,
-    lastModified: new Date(),
-    progress: 0,
-    tags: [],
-    files: [
-      {
-        id: crypto.randomUUID(),
-        name: file.name,
-        type: 'file',
-        path: `/${baseName}/${file.name}`,
-        format: ext,
-        size: file.size,
-        lastModified: new Date(),
-        content,
-      },
-    ],
-  }
-
-  projectStore.addProject(project)
-  projectStore.openProject(id)
-  closeUpload()
-  router.push('/workspace')
 }
 
 const quickActions = [

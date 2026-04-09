@@ -315,12 +315,14 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, type Project, type FileNode } from '~/stores/project'
+import { useAgent } from '~/composables/useAgent'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const router = useRouter()
 const projectStore = useProjectStore()
+const agent = useAgent()
 
 const step = ref(0)
 const stepLabels = ['Program', 'Grid', 'Kat', 'Malzeme', 'Özet']
@@ -558,7 +560,7 @@ function buildS2KContent(name: string, c: TemplateConfig): string {
   return L.join('\n')
 }
 
-function createProject() {
+async function createProject() {
   const name = projectName.value.trim()
   if (!name) return
 
@@ -567,11 +569,25 @@ function createProject() {
   const fileName = `${name}.s2k`
   const content = buildS2KContent(name, c)
 
+  // Agent bağlıysa ve klasör seçili ise dosyayı diske yaz; başarılıysa
+  // projeyi agent path'iyle bağla, sidebar'daki yerel klasör listesini
+  // tazele.
+  let storedAt: string | null = null
+  if (agent.connected.value && agent.root.value) {
+    try {
+      const written = await agent.writeFile(fileName, content)
+      storedAt = written.path
+      await agent.refreshFiles()
+    } catch (err) {
+      console.error('Agent yazma başarısız, sadece tarayıcıda tutuluyor', err)
+    }
+  }
+
   const fileNode: FileNode = {
     id: crypto.randomUUID(),
     name: fileName,
     type: 'file',
-    path: `/${name}/${fileName}`,
+    path: storedAt ? `agent://${storedAt}` : `/${name}/${fileName}`,
     format: '.s2k',
     size: content.length,
     lineCount: content.split('\n').length,
@@ -591,6 +607,7 @@ function createProject() {
       `${c.gridX}x${c.gridY}`,
       `${c.numFloors}kat`,
       ...c.materials,
+      ...(storedAt ? ['yerel'] : []),
     ],
     files: [fileNode],
   }
