@@ -125,6 +125,13 @@ async function deleteFile(path: string): Promise<void> {
   await request(`/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
 }
 
+async function convertSdb(path: string): Promise<void> {
+  await request('/convert/sdb', {
+    method: 'POST',
+    body: JSON.stringify({ path }),
+  })
+}
+
 async function setRoot(newRoot: string | null): Promise<void> {
   const data = await request<{ root: string | null }>('/config', {
     method: 'POST',
@@ -234,6 +241,7 @@ export function useAgent() {
     readFile,
     writeFile,
     deleteFile,
+    convertSdb,
     setRoot,
     onEvent(fn: (e: AgentEvent) => void) {
       eventListeners.add(fn)

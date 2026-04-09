@@ -164,10 +164,17 @@ def sdb_to_s2k(sdb_path: Path, s2k_path: Path) -> None:
     sap = _attach_running()
     _ensure_initialized(sap)
 
-    # Remember whichever model the user currently has open so we can
-    # put it back when we're done.
-    previous_model: str | None = _safe_current_filename(sap)
+    LOG.info(
+        "convert: src=%s mtime=%s",
+        sdb_path.name,
+        sdb_path.stat().st_mtime if sdb_path.exists() else "?",
+    )
 
+    # Always operate on a fresh copy of whatever is on disk right now.
+    # We do not save SAP2000's RAM state, do not look at the user's
+    # currently-open document, and do not try to restore anything when
+    # we're done — the user's instance is left in whatever state SAP
+    # decides to leave it in. The disk file is the source of truth.
     with _temp_copy(sdb_path) as temp_sdb:
         ret = sap.SapModel.File.OpenFile(str(temp_sdb))
         if ret != 0:
@@ -178,15 +185,6 @@ def sdb_to_s2k(sdb_path: Path, s2k_path: Path) -> None:
             raise RuntimeError(f"Save returned {ret}")
 
     _normalise_sap_export(s2k_path)
-
-    # Restore the previous model so the user keeps working where they
-    # left off. Best-effort — failures are non-fatal.
-    if previous_model and Path(previous_model).exists():
-        try:
-            sap.SapModel.File.OpenFile(previous_model)
-        except Exception:
-            pass
-
     LOG.info("Converted %s -> %s", sdb_path.name, s2k_path.name)
 
 

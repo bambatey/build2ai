@@ -42,6 +42,32 @@
       </div>
 
       <div class="agent-list">
+        <!-- .sdb files: show with a Convert button -->
+        <div v-if="sdbFiles.length > 0" class="group-label">.SDB DOSYALARI</div>
+        <div
+          v-for="file in sdbFiles"
+          :key="file.path"
+          class="file-item sdb-item"
+          :title="file.path"
+        >
+          <Icon name="lucide:file-box" class="file-icon" />
+          <span class="file-name">{{ file.name }}</span>
+          <button
+            type="button"
+            class="convert-btn"
+            :disabled="convertingPath === file.path"
+            @click="handleConvert(file)"
+            :title="'s2k\\\' altına .s2k olarak dönüştür'"
+          >
+            <Icon
+              :name="convertingPath === file.path ? 'lucide:loader-2' : 'lucide:refresh-cw'"
+              :class="{ spin: convertingPath === file.path }"
+            />
+          </button>
+        </div>
+
+        <!-- .s2k / .$2k files: openable in the workspace -->
+        <div v-if="visibleFiles.length > 0" class="group-label">.S2K DOSYALARI</div>
         <button
           v-for="file in visibleFiles"
           :key="file.path"
@@ -60,8 +86,11 @@
           />
         </button>
 
-        <div v-if="visibleFiles.length === 0" class="agent-empty small">
-          s2k klasöründe dosya yok
+        <div
+          v-if="sdbFiles.length === 0 && visibleFiles.length === 0"
+          class="agent-empty small"
+        >
+          Klasör boş
         </div>
       </div>
     </template>
@@ -80,6 +109,7 @@ const agent = useAgent()
 const projectStore = useProjectStore()
 
 const loadingPath = ref<string | null>(null)
+const convertingPath = ref<string | null>(null)
 
 const ALLOWED_EXT = /\.(s2k|\$2k)$/i
 
@@ -91,6 +121,16 @@ const visibleFiles = computed(() =>
     // the web app can open.
     if (!f.path.toLowerCase().startsWith('s2k/')) return false
     return ALLOWED_EXT.test(f.name)
+  }),
+)
+
+const sdbFiles = computed(() =>
+  agent.entries.value.filter(f => {
+    // Only top-level .sdb files (the user's source documents). We hide
+    // anything that lives under s2k/ so converted artefacts don't show
+    // up alongside the originals.
+    if (f.path.includes('/')) return false
+    return f.name.toLowerCase().endsWith('.sdb')
   }),
 )
 
@@ -111,6 +151,22 @@ const rootDisplay = computed(() => {
   if (parts.length <= 3) return r
   return '...\\' + parts.slice(-3).join('\\')
 })
+
+const handleConvert = async (file: AgentFile) => {
+  if (convertingPath.value) return
+  convertingPath.value = file.path
+  try {
+    await agent.convertSdb(file.path)
+    // The job runs on the agent in the background; refresh once after
+    // a short delay so the resulting .s2k shows up under the converted
+    // group without the user having to hit reload.
+    setTimeout(() => agent.refreshFiles(), 1500)
+  } catch (err) {
+    console.error('Convert failed', err)
+  } finally {
+    convertingPath.value = null
+  }
+}
 
 const handleOpen = async (file: AgentFile) => {
   if (!file.is_text) return
@@ -319,6 +375,56 @@ const handleOpen = async (file: AgentFile) => {
   width: 14px;
   height: 14px;
   color: var(--accent-purple);
+  animation: spin 1s linear infinite;
+}
+
+.group-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  padding: 0.5rem 0.625rem 0.25rem;
+}
+
+.sdb-item {
+  cursor: default;
+}
+
+.sdb-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.convert-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.convert-btn:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.convert-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.convert-btn :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+
+.spin {
   animation: spin 1s linear infinite;
 }
 

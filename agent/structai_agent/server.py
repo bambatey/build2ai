@@ -62,9 +62,6 @@ class _Context:
         self.watcher.set_root(self.config.root)
         self._debounce_timers: dict[str, threading.Timer] = {}
         self._debounce_lock = threading.Lock()
-        # Initial sweep so already-present .sdb files get exported even
-        # if they were dropped while the agent was offline.
-        self._scan_existing_sdb()
 
     # ---- helpers -------------------------------------------------------
 
@@ -106,10 +103,12 @@ class _Context:
         except ValueError:
             pass
 
-        kind = event.get("type")
-        suffix = abs_path.suffix.lower()
-        if suffix == ".sdb" and kind in ("created", "modified", "moved"):
-            self._schedule_sdb_to_s2k(abs_path)
+        # NOTE: we deliberately do NOT auto-convert .sdb files anymore.
+        # Tearing the user's open SAP2000 model down on every Save was
+        # both unsafe (lost in-RAM edits) and slow. Conversions now run
+        # only when the web UI explicitly POSTs /convert/sdb, or when a
+        # ready-to-use .s2k drops into the watched folder by itself.
+        _ = (event, abs_path)  # touch to avoid unused-variable warnings
 
     def _schedule_sdb_to_s2k(self, sdb_path: Path) -> None:
         """Defer the conversion job until the file has been quiet for a moment.
@@ -303,6 +302,24 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         url = urlparse(self.path)
         try:
+            if url.path == "/convert/sdb":
+                body = self._read_body()
+                rel = body.get("path")
+                if not isinstance(rel, str) or not rel.lower().endswith(".sdb"):
+                    raise FsError("'path' must be a .sdb relative path")
+                if not self.ctx.config.root:
+                    raise FsError("Root not configured", status=409)
+                root = Path(self.ctx.config.root)
+                src = (root / rel).resolve()
+                try:
+                    src.relative_to(root)
+                except ValueError:
+                    raise FsError("Path escapes the sandbox")
+                if not src.exists():
+                    raise FsError("File not found", status=404)
+                self.ctx._enqueue_sdb_to_s2k(src)
+                return self._send_json({"queued": rel})
+
             if url.path == "/config":
                 body = self._read_body()
                 root = body.get("root")
@@ -458,7 +475,6 @@ class AgentServer:
         self.ctx.config.root = root or None
         self.ctx.config.save()
         self.ctx.watcher.set_root(self.ctx.config.root)
-        self.ctx._scan_existing_sdb()
         self._log(f"Root set to: {self.ctx.config.root or '(none)'}")
 
     def start(self) -> None:
