@@ -18,9 +18,9 @@ from typing import Iterable
 TEXT_EXTENSIONS: frozenset[str] = frozenset(
     {
         ".s2k",
-        ".$2k",
+        ".$2k",  # SAP2000's auto-generated text export
         ".e2k",
-        ".$et",
+        ".$et",  # ETABS equivalent
         ".txt",
         ".md",
         ".csv",

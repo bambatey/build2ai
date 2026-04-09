@@ -45,36 +45,19 @@ _LOCALHOST_ORIGIN = re.compile(
 def _origin_allowed(origin: str | None) -> bool:
     return bool(origin and _LOCALHOST_ORIGIN.match(origin))
 
-def _ctx_trace(msg: str) -> None:
-    import os
-    p = os.path.join(os.environ.get("TEMP", os.path.expanduser("~")), "structai-agent-trace.log")
-    try:
-        with open(p, "a", encoding="utf-8") as fh:
-            fh.write(f"[ctx] {msg}\n")
-    except OSError:
-        pass
-
-
 class _Context:
     """Shared agent state attached to the HTTP server instance."""
 
     def __init__(self) -> None:
-        _ctx_trace("loading config")
         self.config = AgentConfig.load()
-        _ctx_trace(f"config root={self.config.root}")
-        _ctx_trace("creating watcher")
         self.watcher = FolderWatcher()
-        _ctx_trace("creating job runner")
         self.jobs = JobRunner(on_status=self._on_jobs_status)
-        _ctx_trace("starting job runner")
         self.jobs.start()
-        _ctx_trace("hooking watcher listener")
         self.watcher.add_event_listener(self._on_fs_event)
-        _ctx_trace("setting watcher root")
         self.watcher.set_root(self.config.root)
-        _ctx_trace("scanning existing sdb")
+        # Initial sweep so already-present .sdb files get exported even
+        # if they were dropped while the agent was offline.
         self._scan_existing_sdb()
-        _ctx_trace("context init done")
 
     # ---- helpers -------------------------------------------------------
 
@@ -87,6 +70,18 @@ class _Context:
         # Push job activity to anyone subscribed to the SSE stream so the
         # web UI can show a "converting..." indicator without polling.
         self.watcher.broadcast({"type": "jobs", "status": status, "ts": time.time()})
+        # Mirror useful state changes into the structured logger so the
+        # desktop UI's log panel actually shows what the worker is up to.
+        if status.get("lastError"):
+            LOG.error("Job error: %s", status["lastError"])
+        elif status.get("busy"):
+            LOG.info("Job worker busy (queued=%d)", status.get("queued", 0))
+        elif status.get("processed"):
+            LOG.info(
+                "Job worker idle (processed=%d, queued=%d)",
+                status.get("processed", 0),
+                status.get("queued", 0),
+            )
 
     def _on_fs_event(self, event: dict) -> None:
         path = event.get("path")
@@ -110,21 +105,18 @@ class _Context:
             self._enqueue_sdb_to_s2k(abs_path)
 
     def _enqueue_sdb_to_s2k(self, sdb_path: Path) -> None:
-        _ctx_trace(f"_enqueue_sdb_to_s2k({sdb_path.name})")
         s2k_dir = self.s2k_dir()
         if s2k_dir is None:
             return
         try:
             s2k_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            _ctx_trace(f"mkdir failed: {exc}")
+        except OSError:
             return
         target = s2k_dir / (sdb_path.stem + ".s2k")
         # Skip if the .s2k is already newer than the .sdb (e.g. we just
         # produced it ourselves a moment ago).
         try:
             if target.exists() and target.stat().st_mtime >= sdb_path.stat().st_mtime:
-                _ctx_trace("up to date, skipping")
                 return
         except OSError:
             pass
@@ -141,13 +133,10 @@ class _Context:
         if not self.config.root:
             return
         root = Path(self.config.root)
-        _ctx_trace(f"scan root={root}")
         try:
             if not root.is_dir():
-                _ctx_trace("not a dir")
                 return
-        except OSError as exc:
-            _ctx_trace(f"is_dir failed: {exc}")
+        except OSError:
             return
         # Run the scan on a worker thread so a slow OneDrive folder
         # never blocks UI startup.
@@ -157,16 +146,13 @@ class _Context:
             name="structai-scan",
             daemon=True,
         ).start()
-        _ctx_trace("scan dispatched")
 
     def _scan_existing_sdb_blocking(self, root: Path) -> None:
         try:
             for sdb in root.glob("*.sdb"):
-                _ctx_trace(f"found sdb: {sdb.name}")
                 self._enqueue_sdb_to_s2k(sdb)
-            _ctx_trace("scan finished")
-        except OSError as exc:
-            _ctx_trace(f"scan error: {exc}")
+        except OSError:
+            pass
 
     def shutdown(self) -> None:
         try:
@@ -406,6 +392,24 @@ class AgentServer:
         self._server: _TServer | None = None
         self._thread: threading.Thread | None = None
         self._listeners: list[Callable[[str], None]] = []
+        # Bridge job runner status into the UI log so the user can see
+        # conversion progress and errors live.
+        self.ctx.jobs._on_status = self._jobs_status_to_log  # type: ignore[attr-defined]
+
+    def _jobs_status_to_log(self, status: dict) -> None:
+        # Re-emit on the SSE stream so the web UI gets the same payload.
+        self.ctx.watcher.broadcast(
+            {"type": "jobs", "status": status, "ts": time.time()}
+        )
+        if status.get("lastError"):
+            self._log(f"İş hatası: {status['lastError']}")
+        elif status.get("busy"):
+            self._log(f"İş çalışıyor (kuyruk={status.get('queued', 0)})")
+        elif status.get("processed"):
+            self._log(
+                f"İş tamamlandı (toplam={status.get('processed', 0)}, "
+                f"kuyruk={status.get('queued', 0)})"
+            )
 
     @property
     def running(self) -> bool:

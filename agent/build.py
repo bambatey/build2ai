@@ -54,15 +54,12 @@ def main() -> None:
     add_data = f"{ICON}{sep}structai_agent/assets"
     add_data_png = f"{ICON_PNG}{sep}structai_agent/assets"
 
-    # NOTE: temporarily switched from --windowed to --console so we can see
-    # stderr/Python tracebacks while debugging startup crashes. Switch back
-    # to --windowed for releases.
     cmd = [
         "pyinstaller",
         "--noconfirm",
         "--clean",
         "--onefile",
-        "--console",
+        "--windowed",
         f"--name={NAME}",
         f"--icon={ICON}",
         f"--add-data={add_data}",

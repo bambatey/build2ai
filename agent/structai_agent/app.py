@@ -36,22 +36,16 @@ LOG_LIMIT = 200
 
 class AgentApp:
     def __init__(self, start_in_tray: bool = False) -> None:
-        _trace(f"AgentApp.__init__ start_in_tray={start_in_tray}")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
-        _trace("ctk theme set")
 
-        _trace("creating AgentServer")
         self.server = AgentServer()
-        _trace("AgentServer created")
         self.server.add_listener(self._on_log)
         self._log_buffer: deque[str] = deque(maxlen=LOG_LIMIT)
         self._tray = None
         self._tray_thread: threading.Thread | None = None
 
-        _trace("creating CTk root")
         self.root = ctk.CTk()
-        _trace("CTk root created")
         self.root.title("StructAI Agent")
         self.root.geometry("560x560")
         self.root.minsize(520, 520)
@@ -64,14 +58,11 @@ class AgentApp:
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        _trace("ui built, starting server")
         # Try starting the server immediately so the user lands on a
         # working state. Failures are reported in the log panel.
         try:
             self.server.start()
-            _trace("server.start ok")
         except OSError as exc:
-            _trace(f"server.start FAILED: {exc}")
             messagebox.showerror("StructAI Agent", f"Port already in use:\n{exc}")
         self._refresh_status()
         self._refresh_root_label()
@@ -440,28 +431,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _trace(msg: str) -> None:
-    import os
-    p = os.path.join(
-        os.environ.get("TEMP", os.path.expanduser("~")),
-        "structai-agent-trace.log",
-    )
-    try:
-        with open(p, "a", encoding="utf-8") as fh:
-            fh.write(f"[app] {msg}\n")
-    except OSError:
-        pass
-
-
 def main() -> None:
-    _trace("parsing args")
     args = parse_args(sys.argv[1:])
-    _trace(f"args={args}")
-    _trace("constructing AgentApp")
     app = AgentApp(start_in_tray=args.tray)
-    _trace("entering mainloop")
     app.run()
-    _trace("mainloop returned")
 
 
 if __name__ == "__main__":

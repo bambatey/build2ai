@@ -107,8 +107,39 @@ def probe(force: bool = False) -> SapStatus:
         return _probe_cache
 
 
+def _ensure_initialized(sap) -> None:
+    """Bring an attached SAP2000 instance into an OAPI-usable state.
+
+    When we attach to a running SAP2000 via ``Helper.GetObject`` the
+    OAPI proxy is returned but its ``SapModel`` is still ``None``
+    until ``ApplicationStart`` has been called. On a *running* instance
+    this does NOT spawn a second window — it just initialises the OAPI
+    side. After that we additionally call ``InitializeNewModel`` so the
+    SapModel object exists even when the user opened SAP2000 with no
+    document.
+    """
+    try:
+        # ApplicationStart(Units, Visible, ModelPath). Visible=True so
+        # we never accidentally hide the user's running window. The
+        # call is a fast no-op when the OAPI side is already up.
+        sap.ApplicationStart(6, True, "")
+    except Exception:
+        pass
+    try:
+        sap.SapModel.InitializeNewModel(6)
+    except Exception:
+        pass
+
+
 def sdb_to_s2k(sdb_path: Path, s2k_path: Path) -> None:
-    """Use the user's running SAP2000 to export ``sdb_path`` as ``s2k_path``."""
+    """Use the user's running SAP2000 to export ``sdb_path`` as ``s2k_path``.
+
+    SAP2000's ``File.Save("name.s2k")`` actually writes a sibling
+    ``name.$2k`` (text export) plus ``name.sdb`` / ``name.ico`` companion
+    files in the destination directory. We rename ``.$2k`` to ``.s2k``
+    so the rest of the agent (and the web UI) sees a single canonical
+    file, and clean up the unwanted siblings.
+    """
     if not _COM_AVAILABLE:
         raise RuntimeError("SAP2000 OAPI bu makinede kullanılamıyor")
     if not sdb_path.exists():
@@ -116,16 +147,46 @@ def sdb_to_s2k(sdb_path: Path, s2k_path: Path) -> None:
 
     s2k_path.parent.mkdir(parents=True, exist_ok=True)
     sap = _attach_running()
+    _ensure_initialized(sap)
 
     ret = sap.SapModel.File.OpenFile(str(sdb_path))
     if ret != 0:
         raise RuntimeError(f"OpenFile returned {ret}")
 
-    # File.Save with a .s2k extension triggers the text-export path.
     ret = sap.SapModel.File.Save(str(s2k_path))
     if ret != 0:
         raise RuntimeError(f"Save returned {ret}")
+
+    _normalise_sap_export(s2k_path)
     LOG.info("Converted %s -> %s", sdb_path.name, s2k_path.name)
+
+
+def _normalise_sap_export(target: Path) -> None:
+    """Rename SAP2000's ``.$2k`` output to ``.s2k`` and drop sibling files.
+
+    SAP2000 always writes the text export with the dollar-prefix
+    extension regardless of what we asked for. It also drops a fresh
+    copy of the binary model (``.sdb``) and a thumbnail (``.ico``) next
+    to it. None of those help us downstream, so we delete them.
+    """
+    folder = target.parent
+    stem = target.stem  # e.g. "BaseModel"
+    dollar = folder / f"{stem}.$2k"
+    if dollar.exists():
+        try:
+            if target.exists():
+                target.unlink()
+            dollar.rename(target)
+        except OSError:
+            pass
+    # Cleanup companions that aren't ours.
+    for suffix in (".sdb", ".ico", ".log"):
+        side = folder / f"{stem}{suffix}"
+        if side.exists():
+            try:
+                side.unlink()
+            except OSError:
+                pass
 
 
 def s2k_to_sdb(s2k_path: Path, sdb_path: Path) -> None:
@@ -137,6 +198,7 @@ def s2k_to_sdb(s2k_path: Path, sdb_path: Path) -> None:
 
     sdb_path.parent.mkdir(parents=True, exist_ok=True)
     sap = _attach_running()
+    _ensure_initialized(sap)
 
     ret = sap.SapModel.File.OpenFile(str(s2k_path))
     if ret != 0:
@@ -152,19 +214,37 @@ def s2k_to_sdb(s2k_path: Path, sdb_path: Path) -> None:
 
 
 def _attach_running():
-    """Find an already-running SAP2000 instance via the COM ROT.
+    """Find an already-running SAP2000 instance.
 
-    We rely on the user keeping SAP2000 open. The first matching name in
-    :data:`_ACTIVE_NAMES` wins.
+    CSI's official Python examples instantiate the *helper* COM object
+    and ask **it** for the running SapObject. The helper acts as a
+    broker that returns a fully initialised ``cOAPI`` proxy whose
+    ``SapModel`` property is non-null even when the GUI was just opened
+    with no model loaded. We try the helper first and fall back to a
+    plain ROT lookup so older builds still work.
     """
     last_err: Exception | None = None
+
+    # Path 1 — CSI helper / GetObject (recommended).
+    try:
+        helper = comtypes.client.CreateObject("SAP2000v1.Helper")
+        sap = helper.GetObject("CSI.SAP2000.API.SapObject")
+        if sap is not None:
+            return sap
+    except Exception as exc:  # pragma: no cover - depends on SAP2000 build
+        last_err = exc
+
+    # Path 2 — bare ROT lookup.
     for name in _ACTIVE_NAMES:
         try:
-            return comtypes.client.GetActiveObject(name)
+            obj = comtypes.client.GetActiveObject(name)
+            if obj is not None:
+                return obj
         except (OSError, comtypes.COMError) as exc:  # type: ignore[attr-defined]
             last_err = exc
+
     raise RuntimeError(
-        f"SAP2000 ROT'da bulunamadı ({last_err}). SAP2000 açık mı?"
+        f"SAP2000'e bağlanılamadı ({last_err}). SAP2000 açık mı?"
     )
 
 
@@ -185,14 +265,17 @@ def _safe_version(sap) -> str | None:
 def init_thread() -> None:
     """Call once on every worker thread that will touch SAP2000.
 
-    Required by COM apartment threading. Safe to call multiple times — the
-    second call is a cheap no-op.
+    Required by COM apartment threading. We initialise as STA because
+    that's what most desktop COM servers (including SAP2000) expect — an
+    MTA worker calling into an STA proxy stalls forever the first time
+    it tries to marshal a method call.
     """
     if not _COM_AVAILABLE:
         return
     try:  # pragma: no cover
         comtypes.CoInitialize()
     except OSError:
+        # RPC_E_CHANGED_MODE — already initialised as MTA on this thread.
         pass
 
 

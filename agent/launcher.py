@@ -47,35 +47,13 @@ def _crash(exc: BaseException) -> None:
         pass
 
 
-def _trace(message: str) -> None:
-    """Append a line to a startup trace log so we can see how far we got."""
-    log_path = os.path.join(
-        os.environ.get("TEMP", os.path.expanduser("~")),
-        "structai-agent-trace.log",
-    )
-    try:
-        with open(log_path, "a", encoding="utf-8") as fh:
-            fh.write(message + "\n")
-    except OSError:
-        pass
-
-
 def main() -> int:
-    _trace("=== launcher start ===")
-    _trace(f"sys.executable={sys.executable}")
-    _trace(f"sys.argv={sys.argv}")
-    _trace(f"frozen={getattr(sys, 'frozen', False)}")
     try:
-        _trace("importing structai_agent.app...")
         from structai_agent.app import main as real_main
 
-        _trace("import ok, calling real main")
         real_main()
-        _trace("real main returned cleanly")
         return 0
     except BaseException as exc:
-        _trace(f"EXCEPTION: {type(exc).__name__}: {exc}")
-        _trace(traceback.format_exc())
         _crash(exc)
         return 1
 
