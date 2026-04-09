@@ -45,6 +45,8 @@
           </button>
         </div>
       </div>
+
+      <LayoutAgentFilesPanel v-if="!isCollapsed" />
     </template>
 
     <!-- MOD B: Aktif proje var → switcher + chat history -->
@@ -250,8 +252,9 @@ onMounted(() => {
   padding: 0.5rem 0.75rem;
   border-top: 1px solid var(--border-default);
   margin-top: 0.5rem;
-  flex: 1;
+  max-height: 220px;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .section-label {

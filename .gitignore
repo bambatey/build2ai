@@ -24,3 +24,12 @@ logs
 .env.*
 .envrc
 !.env.example
+
+# Python / agent
+__pycache__
+*.pyc
+*.spec
+agent/venv
+agent/.venv
+agent/build
+agent/dist
