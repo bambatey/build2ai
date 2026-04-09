@@ -43,20 +43,16 @@
 
       <div class="agent-list">
         <button
-          v-for="file in agent.entries.value"
+          v-for="file in visibleFiles"
           :key="file.path"
           type="button"
           class="file-item"
-          :class="{ disabled: !file.is_text }"
           :title="file.path"
-          :disabled="!file.is_text || loadingPath === file.path"
+          :disabled="loadingPath === file.path"
           @click="handleOpen(file)"
         >
-          <Icon
-            :name="file.is_text ? 'lucide:file-text' : 'lucide:file'"
-            class="file-icon"
-          />
-          <span class="file-name">{{ file.name }}</span>
+          <Icon name="lucide:file-text" class="file-icon" />
+          <span class="file-name">{{ displayName(file) }}</span>
           <Icon
             v-if="loadingPath === file.path"
             name="lucide:loader-2"
@@ -64,8 +60,8 @@
           />
         </button>
 
-        <div v-if="agent.entries.value.length === 0" class="agent-empty small">
-          Klasör boş
+        <div v-if="visibleFiles.length === 0" class="agent-empty small">
+          s2k klasöründe dosya yok
         </div>
       </div>
     </template>
@@ -84,6 +80,23 @@ const agent = useAgent()
 const projectStore = useProjectStore()
 
 const loadingPath = ref<string | null>(null)
+
+const ALLOWED_EXT = /\.(s2k|\$2k)$/i
+
+const visibleFiles = computed(() =>
+  agent.entries.value.filter(f => {
+    // Only files inside the agent-managed s2k/ subfolder, and only the
+    // text exports we actually understand. Everything else (.sdb, .ico,
+    // .sbk, ...) is hidden so the sidebar stays focused on the things
+    // the web app can open.
+    if (!f.path.toLowerCase().startsWith('s2k/')) return false
+    return ALLOWED_EXT.test(f.name)
+  }),
+)
+
+const displayName = (file: AgentFile) =>
+  // Strip the "s2k/" prefix so the panel reads cleanly.
+  file.path.replace(/^s2k\//i, '')
 
 const statusClass = computed(() => {
   if (agent.checking.value) return 'checking'

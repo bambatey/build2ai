@@ -126,61 +126,47 @@
         </div>
       </div>
 
-      <!-- Agent Ayarları -->
+      <!-- Local Agent -->
       <div class="settings-section">
-        <h2 class="section-title">Agent</h2>
+        <h2 class="section-title">Local Agent</h2>
 
         <div class="settings-items">
           <div class="setting-item">
             <div class="setting-label">
               <label>Durum</label>
+              <span class="setting-help">
+                StructAI Agent uygulaması ile bağlantı durumu
+              </span>
             </div>
             <div class="agent-status-display">
-              <span class="status-dot" :class="agentStore.status" />
-              <span class="status-text">{{ agentStore.statusText }}</span>
+              <span
+                class="status-dot"
+                :class="agent.connected.value ? 'connected' : 'disconnected'"
+              />
+              <span class="status-text">
+                {{ agent.connected.value ? 'Bağlı' : 'Bağlı değil' }}
+              </span>
             </div>
           </div>
 
           <div class="setting-item">
             <div class="setting-label">
               <label>İzlenen Klasör</label>
+              <span class="setting-help">
+                Klasörü değiştirmek için Agent uygulamasını kullanın
+              </span>
             </div>
-            <div class="input-group">
-              <input
-                v-model="agentStore.watchFolder"
-                type="text"
-                placeholder="C:\Projects\"
-                class="setting-input"
-              />
-              <button class="input-addon">
-                <Icon name="lucide:folder" />
-              </button>
+            <div class="agent-root-display">
+              {{ agent.root.value || '(seçilmedi)' }}
             </div>
           </div>
 
           <div class="setting-item">
             <div class="setting-label">
-              <label>Otomatik İçe Aktarım</label>
-              <span class="setting-help">Yeni dosyalar otomatik yüklensin</span>
+              <label>Dosya Sayısı</label>
             </div>
-            <label class="toggle-switch">
-              <input
-                v-model="agentStore.autoImport"
-                type="checkbox"
-              />
-              <span class="toggle-slider" />
-            </label>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-label">
-              <label>Bağlantı</label>
-            </div>
-            <div class="button-group">
-              <button @click="handleTestConnection" class="btn btn-secondary" :disabled="isTestingConnection">
-                <Icon name="lucide:wifi" />
-                {{ isTestingConnection ? 'Test Ediliyor...' : 'Bağlantıyı Test Et' }}
-              </button>
+            <div class="agent-root-display">
+              {{ agent.fileCount.value }}
             </div>
           </div>
         </div>
@@ -267,7 +253,7 @@
 import { ref, onMounted } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import { useChatStore } from '~/stores/chat'
-import { useAgentStore } from '~/stores/agent'
+import { useAgent } from '~/composables/useAgent'
 
 definePageMeta({
   layout: 'default',
@@ -280,10 +266,9 @@ useSeoMeta({
 
 const settingsStore = useSettingsStore()
 const chatStore = useChatStore()
-const agentStore = useAgentStore()
+const agent = useAgent()
 
 const showApiKey = ref(false)
-const isTestingConnection = ref(false)
 
 onMounted(() => {
   settingsStore.loadFromStorage()
@@ -298,12 +283,6 @@ const handleReset = () => {
   if (confirm('Tüm ayarları sıfırlamak istediğinizden emin misiniz?')) {
     settingsStore.resetToDefaults()
   }
-}
-
-const handleTestConnection = async () => {
-  isTestingConnection.value = true
-  await agentStore.testConnection()
-  isTestingConnection.value = false
 }
 </script>
 

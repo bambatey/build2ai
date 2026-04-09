@@ -65,16 +65,6 @@
       <LayoutChatHistoryList v-if="!isCollapsed" />
     </template>
 
-    <!-- Agent Status -->
-    <div class="sidebar-footer">
-      <div class="agent-status" :class="{ collapsed: isCollapsed }">
-        <div class="agent-indicator">
-          <span class="status-dot" :class="agentStore.status" />
-          <span v-if="!isCollapsed" class="status-text">{{ agentStore.statusText }}</span>
-        </div>
-      </div>
-    </div>
-
     <!-- Collapse Toggle -->
     <button @click="toggleCollapse" class="collapse-btn">
       <Icon :name="isCollapsed ? 'lucide:chevrons-right' : 'lucide:chevrons-left'" />
@@ -85,13 +75,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAgentStore } from '~/stores/agent'
 import { useProjectStore } from '~/stores/project'
 import { useChatStore } from '~/stores/chat'
 
 const route = useRoute()
 const router = useRouter()
-const agentStore = useAgentStore()
 const projectStore = useProjectStore()
 const chatStore = useChatStore()
 const isCollapsed = ref(false)
