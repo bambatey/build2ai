@@ -48,6 +48,11 @@ def _origin_allowed(origin: str | None) -> bool:
 class _Context:
     """Shared agent state attached to the HTTP server instance."""
 
+    # Debounce window for filesystem events. SAP2000 emits a burst of
+    # writes whenever the user hits Save, so we coalesce anything that
+    # happens within this window into a single conversion job.
+    SDB_DEBOUNCE_SECONDS = 1.5
+
     def __init__(self) -> None:
         self.config = AgentConfig.load()
         self.watcher = FolderWatcher()
@@ -55,6 +60,8 @@ class _Context:
         self.jobs.start()
         self.watcher.add_event_listener(self._on_fs_event)
         self.watcher.set_root(self.config.root)
+        self._debounce_timers: dict[str, threading.Timer] = {}
+        self._debounce_lock = threading.Lock()
         # Initial sweep so already-present .sdb files get exported even
         # if they were dropped while the agent was offline.
         self._scan_existing_sdb()
@@ -102,9 +109,33 @@ class _Context:
         kind = event.get("type")
         suffix = abs_path.suffix.lower()
         if suffix == ".sdb" and kind in ("created", "modified", "moved"):
-            self._enqueue_sdb_to_s2k(abs_path)
+            self._schedule_sdb_to_s2k(abs_path)
+
+    def _schedule_sdb_to_s2k(self, sdb_path: Path) -> None:
+        """Defer the conversion job until the file has been quiet for a moment.
+
+        SAP2000 fires several events for a single Save (size update,
+        attribute touch, etc.); collapsing them into one delayed job
+        spares both the user and the worker a flurry of redundant
+        OAPI calls.
+        """
+        key = str(sdb_path)
+        with self._debounce_lock:
+            existing = self._debounce_timers.pop(key, None)
+            if existing is not None:
+                existing.cancel()
+            timer = threading.Timer(
+                self.SDB_DEBOUNCE_SECONDS,
+                self._enqueue_sdb_to_s2k,
+                args=(sdb_path,),
+            )
+            timer.daemon = True
+            self._debounce_timers[key] = timer
+            timer.start()
 
     def _enqueue_sdb_to_s2k(self, sdb_path: Path) -> None:
+        with self._debounce_lock:
+            self._debounce_timers.pop(str(sdb_path), None)
         s2k_dir = self.s2k_dir()
         if s2k_dir is None:
             return
@@ -150,7 +181,11 @@ class _Context:
     def _scan_existing_sdb_blocking(self, root: Path) -> None:
         try:
             for sdb in root.glob("*.sdb"):
-                self._enqueue_sdb_to_s2k(sdb)
+                # Use the debounced path so a hot start doesn't fire
+                # five OAPI calls back-to-back. The 1.5s delay also
+                # gives us a chance to coalesce a duplicate triggered
+                # by the watcher's own initial scan.
+                self._schedule_sdb_to_s2k(sdb)
         except OSError:
             pass
 

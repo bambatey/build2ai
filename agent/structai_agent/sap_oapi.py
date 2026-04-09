@@ -20,10 +20,14 @@ that responds wins.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
+import shutil
 import sys
+import tempfile
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -134,31 +138,130 @@ def _ensure_initialized(sap) -> None:
 def sdb_to_s2k(sdb_path: Path, s2k_path: Path) -> None:
     """Use the user's running SAP2000 to export ``sdb_path`` as ``s2k_path``.
 
-    SAP2000's ``File.Save("name.s2k")`` actually writes a sibling
-    ``name.$2k`` (text export) plus ``name.sdb`` / ``name.ico`` companion
-    files in the destination directory. We rename ``.$2k`` to ``.s2k``
-    so the rest of the agent (and the web UI) sees a single canonical
-    file, and clean up the unwanted siblings.
+    To stay out of the user's way we
+
+    1. **Wait for the file to settle.** A user who just hit Ctrl+S in
+       SAP2000 may not have finished flushing the binary; we retry a
+       few times until the size stops changing.
+    2. **Work on a temp copy.** SAP2000 holds the live ``.sdb`` open with
+       an exclusive lock, so OAPI ``OpenFile`` on the same path returns
+       error 1. We snapshot the bytes into ``%TEMP%`` first and feed
+       *that* path to OAPI instead.
+    3. **Restore the user's previous model.** ``OpenFile`` swaps the
+       running model out, so we capture whatever was open beforehand
+       and reopen it once we're done. The user never sees the swap if
+       it happens within ``a couple of frames``.
     """
     if not _COM_AVAILABLE:
         raise RuntimeError("SAP2000 OAPI bu makinede kullanılamıyor")
+
+    _wait_until_stable(sdb_path)
     if not sdb_path.exists():
         raise FileNotFoundError(sdb_path)
 
     s2k_path.parent.mkdir(parents=True, exist_ok=True)
+
     sap = _attach_running()
     _ensure_initialized(sap)
 
-    ret = sap.SapModel.File.OpenFile(str(sdb_path))
-    if ret != 0:
-        raise RuntimeError(f"OpenFile returned {ret}")
+    # Remember whichever model the user currently has open so we can
+    # put it back when we're done.
+    previous_model: str | None = _safe_current_filename(sap)
 
-    ret = sap.SapModel.File.Save(str(s2k_path))
-    if ret != 0:
-        raise RuntimeError(f"Save returned {ret}")
+    with _temp_copy(sdb_path) as temp_sdb:
+        ret = sap.SapModel.File.OpenFile(str(temp_sdb))
+        if ret != 0:
+            raise RuntimeError(f"OpenFile returned {ret}")
+
+        ret = sap.SapModel.File.Save(str(s2k_path))
+        if ret != 0:
+            raise RuntimeError(f"Save returned {ret}")
 
     _normalise_sap_export(s2k_path)
+
+    # Restore the previous model so the user keeps working where they
+    # left off. Best-effort — failures are non-fatal.
+    if previous_model and Path(previous_model).exists():
+        try:
+            sap.SapModel.File.OpenFile(previous_model)
+        except Exception:
+            pass
+
     LOG.info("Converted %s -> %s", sdb_path.name, s2k_path.name)
+
+
+def _wait_until_stable(
+    path: Path, *, attempts: int = 8, interval: float = 0.4
+) -> None:
+    """Block until ``path``'s size has stopped changing.
+
+    Used to ride out an in-progress save: SAP2000 may flush the .sdb
+    in chunks, and we don't want to fire OAPI at a half-written file.
+    """
+    last_size = -1
+    for _ in range(attempts):
+        try:
+            size = path.stat().st_size
+        except OSError:
+            time.sleep(interval)
+            continue
+        if size == last_size and size > 0:
+            return
+        last_size = size
+        time.sleep(interval)
+
+
+@contextlib.contextmanager
+def _temp_copy(src: Path):
+    """Copy ``src`` to a uniquely-named temp file and yield its path.
+
+    Cleaned up automatically once the ``with`` block exits. We retry
+    the copy a couple of times because a freshly-saved .sdb may still
+    have a sharing-violation lock for a brief moment.
+    """
+    tmp_dir = Path(tempfile.gettempdir()) / "structai-agent"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    dst = tmp_dir / f"{src.stem}-{os.getpid()}-{int(time.time() * 1000)}.sdb"
+
+    last_err: Exception | None = None
+    for attempt in range(5):
+        try:
+            shutil.copy2(src, dst)
+            last_err = None
+            break
+        except (PermissionError, OSError) as exc:
+            last_err = exc
+            time.sleep(0.4 * (attempt + 1))
+    if last_err is not None:
+        raise RuntimeError(f"Could not copy {src.name} to temp: {last_err}")
+
+    try:
+        yield dst
+    finally:
+        try:
+            dst.unlink()
+        except OSError:
+            pass
+
+
+def _safe_current_filename(sap) -> str | None:
+    """Return the path of whatever model SAP2000 has open right now.
+
+    The OAPI exposes ``SapModel.GetModelFilename(IncludePath=True)``
+    but the signature varies across versions, so we wrap it in a
+    blanket try/except.
+    """
+    try:
+        result = sap.SapModel.GetModelFilename(True)
+    except Exception:
+        return None
+    if isinstance(result, str) and result:
+        return result
+    if isinstance(result, tuple):
+        for item in result:
+            if isinstance(item, str) and item:
+                return item
+    return None
 
 
 def _normalise_sap_export(target: Path) -> None:
