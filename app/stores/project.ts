@@ -274,20 +274,23 @@ export const useProjectStore = defineStore('project', {
       const project = this.projects.find(p => p.id === id)
       if (!project) return
 
+      // Eski state'i temizle
+      this.currentFile = null
+      this.originalContent = ''
+      this.modifiedContent = ''
+      this.changes = []
+
       this.activeProjectId = id
       this.currentProject = project
 
-      // Backend'den dosyaları yükle
-      if (project.files.length === 0) {
-        const files = await this.fetchProjectDetail(id)
-        project.files = files
-      }
-
+      // Backend'den dosyaları her zaman yükle (güncel veri)
+      const files = await this.fetchProjectDetail(id)
+      project.files = files
       this.files = project.files
 
-      // İlk dosyanın içeriğini otomatik yükle (3D görünüm ve chat için)
+      // İlk dosyanın içeriğini yükle (3D görünüm ve chat için)
       const firstFile = project.files.find(f => f.type === 'file')
-      if (firstFile && !firstFile.content) {
+      if (firstFile) {
         await this.openFile(firstFile)
       }
 

@@ -356,10 +356,20 @@ onBeforeUnmount(() => {
   controls = null
 })
 
-// Aktif proje veya dosya içeriği değişirse yeniden yükle
+// Dosya içeriği değişirse yeniden yükle
 watch(activeS2KContent, (newVal, oldVal) => {
   if (newVal && newVal !== oldVal) {
     console.log('[3D] Content değişti, model yeniden yükleniyor...', newVal.length, 'char')
+    loadModel()
+  }
+})
+
+// Aktif proje değiştiğinde modeli yeniden yükle
+watch(() => projectStore.activeProjectId, async (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    console.log('[3D] Proje değişti:', newId)
+    // Dosya yüklenene kadar kısa bekle
+    await new Promise(resolve => setTimeout(resolve, 500))
     loadModel()
   }
 })
