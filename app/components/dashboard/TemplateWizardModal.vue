@@ -547,6 +547,48 @@ function buildS2KContent(name: string, c: TemplateConfig): string {
   }
   L.push(` `)
 
+  // Frame connectivity (kolonlar + kirişler)
+  const pointsPerFloor = c.gridX * c.gridY
+  L.push(`TABLE:  "CONNECTIVITY - FRAME"`)
+  let frameId = 1
+
+  // Kolonlar: her grid noktasında dikey bağlantı (kat-kat arası)
+  for (let k = 0; k < c.numFloors; k++) {
+    for (let j = 0; j < c.gridY; j++) {
+      for (let i = 0; i < c.gridX; i++) {
+        const bottom = k * pointsPerFloor + j * c.gridX + i + 1
+        const top = (k + 1) * pointsPerFloor + j * c.gridX + i + 1
+        L.push(`   Frame=${frameId}   JointI=${bottom}   JointJ=${top}   IsCurved=No   Length=${num(c.floorHeight)}   CentroidX=0   CentroidY=0   CentroidZ=${num(k * c.floorHeight + c.floorHeight / 2)}`)
+        frameId++
+      }
+    }
+  }
+
+  // Kirişler X yönü: her katta, her satırda yatay bağlantı
+  for (let k = 1; k <= c.numFloors; k++) {
+    for (let j = 0; j < c.gridY; j++) {
+      for (let i = 0; i < c.gridX - 1; i++) {
+        const left = k * pointsPerFloor + j * c.gridX + i + 1
+        const right = left + 1
+        L.push(`   Frame=${frameId}   JointI=${left}   JointJ=${right}   IsCurved=No   Length=${num(c.gridSpacing)}   CentroidX=0   CentroidY=0   CentroidZ=${num(k * c.floorHeight)}`)
+        frameId++
+      }
+    }
+  }
+
+  // Kirişler Y yönü: her katta, her sütunda derinlik bağlantısı
+  for (let k = 1; k <= c.numFloors; k++) {
+    for (let j = 0; j < c.gridY - 1; j++) {
+      for (let i = 0; i < c.gridX; i++) {
+        const front = k * pointsPerFloor + j * c.gridX + i + 1
+        const back = front + c.gridX
+        L.push(`   Frame=${frameId}   JointI=${front}   JointJ=${back}   IsCurved=No   Length=${num(c.gridSpacing)}   CentroidX=0   CentroidY=0   CentroidZ=${num(k * c.floorHeight)}`)
+        frameId++
+      }
+    }
+  }
+  L.push(` `)
+
   // Load patterns
   L.push(`TABLE:  "LOAD PATTERN DEFINITIONS"`)
   L.push(`   LoadPat=G   DesignType=Dead   SelfWtMult=1`)

@@ -143,14 +143,20 @@ export function parseS2K(text: string): ParsedModel {
   // Frames
   const frames: ParsedFrame[] = []
   const frameRows =
-    tables.get('CONNECTIVITY - FRAME') ?? tables.get('CONNECTIVITY - LINE') ?? []
+    tables.get('CONNECTIVITY - FRAME') ??
+    tables.get('CONNECTIVITY - LINE') ??
+    tables.get('FRAME ELEMENT DEFINITIONS 01 - GENERAL') ??
+    []
   for (const row of frameRows) {
     const r = parseRow(row)
-    const id = num(r.Frame ?? r.Line)
-    const i = num(r.JointI)
-    const j = num(r.JointJ)
-    if (![id, i, j].every(Number.isFinite)) continue
-    frames.push({ id, i, j, section: r.SectionName })
+    const rawId = r.Frame ?? r.Line
+    // Frame ID sayısal olmayabilir (C1, B2X1 gibi) — index kullan
+    const id = Number.isFinite(num(rawId)) ? num(rawId) : frames.length + 1
+    // SAP2000 farklı key isimleri kullanabilir: JointI/JointJ veya Joint1/Joint2 veya iJoint/jJoint
+    const i = num(r.JointI ?? r.Joint1 ?? r.iJoint)
+    const j = num(r.JointJ ?? r.Joint2 ?? r.jJoint)
+    if (![i, j].every(Number.isFinite)) continue
+    frames.push({ id, i, j, section: r.SectionName ?? r.Section })
   }
 
   // Areas (shells / slabs)

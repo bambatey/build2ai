@@ -80,6 +80,16 @@ watch(() => projectStore.currentFile, (newFile) => {
   }
 }, { immediate: true })
 
+// AI dosyayı güncellediğinde editörü de güncelle
+watch(() => projectStore.modifiedContent, (newContent) => {
+  if (editor && newContent !== undefined) {
+    const currentValue = editor.getValue()
+    if (currentValue !== newContent) {
+      editor.setValue(newContent)
+    }
+  }
+})
+
 const initEditor = () => {
   if (!editorContainer.value) return
 

@@ -295,6 +295,14 @@ const initThree = () => {
 }
 
 const activeS2KContent = computed<string | null>(() => {
+  // Editörde açık dosya varsa onun güncel içeriğini kullan
+  if (projectStore.modifiedContent && projectStore.currentFile) {
+    const ext = (projectStore.currentFile.format ?? '').toLowerCase()
+    if (ext === '.s2k' || ext === '.e2k') {
+      return projectStore.modifiedContent
+    }
+  }
+  // Yoksa projedeki ilk s2k dosyasının content'ini kullan
   const project = projectStore.activeProject
   if (!project) return null
   const file = project.files.find(f => {
@@ -305,6 +313,10 @@ const activeS2KContent = computed<string | null>(() => {
 })
 
 const loadModel = async () => {
+  // Scene yoksa init et (sekme geçişi sonrası)
+  if (!scene && mountEl.value) {
+    initThree()
+  }
   loading.value = true
   error.value = ''
   try {
@@ -344,9 +356,12 @@ onBeforeUnmount(() => {
   controls = null
 })
 
-// Aktif proje değişirse yeniden yükle
-watch(activeS2KContent, () => {
-  if (scene) loadModel()
+// Aktif proje veya dosya içeriği değişirse yeniden yükle
+watch(activeS2KContent, (newVal, oldVal) => {
+  if (newVal && newVal !== oldVal) {
+    console.log('[3D] Content değişti, model yeniden yükleniyor...', newVal.length, 'char')
+    loadModel()
+  }
 })
 </script>
 

@@ -18,41 +18,33 @@
         </div>
         <div class="stat-value">{{ stats.totalProjects }}</div>
         <div class="stat-footer">
-          <span class="stat-trend positive">
-            <Icon name="lucide:trending-up" />
-            <span>12%</span>
-          </span>
-          <span class="stat-period">bu ay</span>
+          <span class="stat-period">kayıtlı proje</span>
         </div>
       </div>
 
       <div class="stat-card">
         <div class="stat-header">
-          <span class="stat-label">Aktif Oturum</span>
+          <span class="stat-label">Sohbet Oturumu</span>
           <div class="stat-icon">
-            <Icon name="lucide:activity" />
+            <Icon name="lucide:message-square" />
           </div>
         </div>
         <div class="stat-value">{{ stats.activeSessions }}</div>
         <div class="stat-footer">
-          <span class="stat-period">şu anda</span>
+          <span class="stat-period">toplam oturum</span>
         </div>
       </div>
 
       <div class="stat-card">
         <div class="stat-header">
-          <span class="stat-label">AI İşlem</span>
+          <span class="stat-label">AI Mesaj</span>
           <div class="stat-icon">
             <Icon name="lucide:sparkles" />
           </div>
         </div>
         <div class="stat-value">{{ stats.aiOperations }}</div>
         <div class="stat-footer">
-          <span class="stat-trend positive">
-            <Icon name="lucide:trending-up" />
-            <span>23%</span>
-          </span>
-          <span class="stat-period">bu hafta</span>
+          <span class="stat-period">toplam mesaj</span>
         </div>
       </div>
 
@@ -199,9 +191,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { mockStats, mockSupportedPrograms, formatTimeAgo } from '~/utils/mockData'
+import { mockSupportedPrograms, formatTimeAgo } from '~/utils/mockData'
 import { useAgentStore } from '~/stores/agent'
 import { useProjectStore } from '~/stores/project'
+import { useChatStore } from '~/stores/chat'
 import { useAgent } from '~/composables/useAgent'
 import { createProjectFromUpload } from '~/utils/projectFromUpload'
 
@@ -217,13 +210,21 @@ useSeoMeta({
 const router = useRouter()
 const agentStore = useAgentStore()
 const projectStore = useProjectStore()
+const chatStore = useChatStore()
 const agent = useAgent()
-const stats = mockStats
+
+const stats = computed(() => ({
+  totalProjects: projectStore.projects.length,
+  activeSessions: chatStore.sessions.length,
+  aiOperations: chatStore.totalMessageCount,
+}))
+
 const recentProjects = computed(() => projectStore.recentProjects.slice(0, 5))
 const programs = mockSupportedPrograms
 
-onMounted(() => {
-  projectStore.hydrate()
+onMounted(async () => {
+  await projectStore.hydrate()
+  await chatStore.hydrate()
 })
 
 const handleOpenProject = (id: string) => {

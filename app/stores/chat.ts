@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { useProjectStore } from '~/stores/project'
-import { apiGet, apiPost, API_BASE } from '~/utils/api'
+import { apiGet, apiPost, apiPut, API_BASE } from '~/utils/api'
 
 export interface ChatMessage {
   id: string
@@ -37,6 +37,7 @@ export const useChatStore = defineStore('chat', {
   state: () => ({
     messages: [] as ChatMessage[],
     isLoading: false,
+    totalMessageCount: 0,
     model: '' as string,  // Boş = backend'in default modeli kullanılır
     quickCommands: [
       {
@@ -151,12 +152,21 @@ export const useChatStore = defineStore('chat', {
       }
       this.messages.push(aiMessage)
 
-      // Aktif oturum güncelle
+      // Aktif oturum güncelle — ismi ilk mesajdan türet
       const active = this.sessions.find(s => s.id === this.activeSessionId)
       if (active) {
         active.lastActive = new Date()
         if (active.name === 'Yeni Sohbet' && content.trim()) {
-          active.name = content.trim().slice(0, 40)
+          const newName = content.trim().slice(0, 40)
+          active.name = newName
+          // Backend'e de yaz
+          const projectStore = useProjectStore()
+          if (projectStore.activeProjectId) {
+            apiPut(
+              `/api/chat/sessions/${active.id}/rename?project_id=${projectStore.activeProjectId}`,
+              { name: newName }
+            ).catch(() => {})
+          }
         }
       }
 
@@ -255,6 +265,36 @@ export const useChatStore = defineStore('chat', {
                 }
               }
 
+              // AI dosyayı güncelledi — otomatik uygula
+              if (parsed.type === 'file_update' && parsed.content) {
+                const projectStore = useProjectStore()
+                const updatedContent = parsed.content
+
+                // Tüm store referanslarını güncelle
+                projectStore.originalContent = updatedContent
+                projectStore.modifiedContent = updatedContent
+                if (projectStore.currentFile) {
+                  projectStore.currentFile.content = updatedContent
+                }
+                if (projectStore.activeProject) {
+                  const file = projectStore.activeProject.files.find(
+                    f => f.id === projectStore.currentFile?.id
+                  )
+                  if (file) file.content = updatedContent
+                }
+
+                // Backend'e kaydet
+                if (projectStore.activeProjectId && projectStore.currentFile?.id) {
+                  projectStore.saveFileToBackend(
+                    projectStore.activeProjectId,
+                    projectStore.currentFile.id,
+                    updatedContent,
+                  ).catch(e => console.error('[Chat] Dosya kaydetme hatası:', e))
+                }
+
+                console.log('[Chat] Dosya otomatik güncellendi:', updatedContent.length, 'karakter')
+              }
+
               if (parsed.type === 'finish' || parsed.type === 'done') {
                 if (parsed.error) {
                   const msgIndex = this.messages.findIndex(m => m.id === messageId)
@@ -302,20 +342,58 @@ export const useChatStore = defineStore('chat', {
       this.model = model
     },
 
-    hydrate() {
-      // Backend'den yükleme ensureSessionForProject veya fetchSessions'da yapılır
+    async hydrate() {
+      // Tüm projelerin session'larını yükle
+      const projectStore = useProjectStore()
+      let totalMsgs = 0
+      for (const project of projectStore.projects) {
+        await this.fetchSessions(project.id)
+      }
+      // Her session'ın mesaj sayısını çek
+      for (const session of this.sessions) {
+        try {
+          const messages = await apiGet<any[]>(`/api/chat/sessions/${session.id}/messages?project_id=${session.projectId}`)
+          const count = (messages || []).length
+          totalMsgs += count
+          session.messages = (messages || []).map((m: any) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: new Date(m.created_at),
+            diff: m.diff ? m.diff.map((d: any) => ({
+              lineNumber: d.line_number ?? d.lineNumber,
+              oldValue: d.old_value ?? d.oldValue,
+              newValue: d.new_value ?? d.newValue,
+            })) : undefined,
+          }))
+        } catch {}
+      }
+      this.totalMessageCount = totalMsgs
     },
 
-    // ---! Backend'den oturumları yükle
+    // ---! Backend'den oturumları yükle ve isimleri düzelt
     async fetchSessions(projectId: string) {
       try {
         const sessions = await apiGet<any[]>(`/api/projects/${projectId}/chat/sessions`)
         for (const s of (sessions || [])) {
           if (!this.sessions.find(existing => existing.id === s.id)) {
+            let sessionName = s.name || 'Sohbet'
+
+            // İsim "Yeni Sohbet" ise mesajlardan türet
+            if (sessionName === 'Yeni Sohbet') {
+              try {
+                const messages = await apiGet<any[]>(`/api/chat/sessions/${s.id}/messages?project_id=${projectId}`)
+                const firstUserMsg = (messages || []).find((m: any) => m.role === 'user')
+                if (firstUserMsg?.content) {
+                  sessionName = firstUserMsg.content.trim().slice(0, 40)
+                }
+              } catch {}
+            }
+
             this.sessions.push({
               id: s.id,
               projectId: s.project_id || projectId,
-              name: s.name || 'Sohbet',
+              name: sessionName,
               messages: [],
               createdAt: new Date(s.created_at),
               lastActive: new Date(s.last_active),
@@ -338,7 +416,11 @@ export const useChatStore = defineStore('chat', {
             role: m.role,
             content: m.content,
             timestamp: new Date(m.created_at),
-            diff: m.diff,
+            diff: m.diff ? m.diff.map((d: any) => ({
+              lineNumber: d.line_number ?? d.lineNumber,
+              oldValue: d.old_value ?? d.oldValue,
+              newValue: d.new_value ?? d.newValue,
+            })) : undefined,
           }))
           if (this.activeSessionId === sessionId) {
             this.messages = session.messages

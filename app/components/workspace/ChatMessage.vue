@@ -35,14 +35,20 @@
 
         <!-- Actions -->
         <div v-if="message.role === 'assistant'" class="message-actions">
-          <button @click="handleApply" class="action-btn primary">
-            <Icon name="lucide:check" />
-            Uygula
-          </button>
-          <button @click="handleReject" class="action-btn secondary">
-            <Icon name="lucide:x" />
-            Reddet
-          </button>
+          <template v-if="!applied">
+            <button @click="handleApply" class="action-btn primary">
+              <Icon name="lucide:check" />
+              Uygula
+            </button>
+            <button @click="handleReject" class="action-btn secondary">
+              <Icon name="lucide:x" />
+              Reddet
+            </button>
+          </template>
+          <span v-else class="applied-badge">
+            <Icon name="lucide:check-circle" />
+            Uygulandı
+          </span>
         </div>
       </div>
     </div>
@@ -53,12 +59,15 @@
 import { ref, computed } from 'vue'
 import { marked } from 'marked'
 import type { ChatMessage } from '~/stores/chat'
+import { useProjectStore } from '~/stores/project'
 
 const props = defineProps<{
   message: ChatMessage
 }>()
 
+const projectStore = useProjectStore()
 const showDiff = ref(false)
+const applied = ref(false)
 
 const messageClass = computed(() => ({
   'user-message': props.message.role === 'user',
@@ -80,12 +89,64 @@ const formatTime = (date: Date) => {
   })
 }
 
-const handleApply = () => {
-  console.log('Uygula')
+const handleApply = async () => {
+  if (!props.message.diff || !props.message.diff.length || applied.value) return
+
+  let content = projectStore.modifiedContent || projectStore.originalContent
+  if (!content) {
+    console.error('[Chat] Uygulama başarısız: dosya içeriği yok')
+    return
+  }
+
+  console.log('[Chat] Değişiklik uygulanıyor:', props.message.diff.length, 'satır')
+  console.log('[Chat] Diff verileri:', JSON.stringify(props.message.diff))
+
+  const lines = content.split('\n')
+
+  // Satır numarasına göre ters sırala (alttan üste uygula, index kaymasını önle)
+  const sortedDiffs = [...props.message.diff].sort((a, b) => b.lineNumber - a.lineNumber)
+
+  for (const diff of sortedDiffs) {
+    const idx = diff.lineNumber - 1
+    if (idx >= 0 && idx < lines.length) {
+      console.log(`[Chat] Satır ${diff.lineNumber}: "${lines[idx].trim()}" → "${diff.newValue.trim()}"`)
+      lines[idx] = diff.newValue
+    } else {
+      console.warn(`[Chat] Satır ${diff.lineNumber} dosya dışında (toplam ${lines.length} satır)`)
+    }
+  }
+
+  const updatedContent = lines.join('\n')
+
+  // 1. Store'u güncelle — editör ve 3D view bunu dinliyor
+  projectStore.originalContent = updatedContent
+  projectStore.modifiedContent = updatedContent
+  if (projectStore.currentFile) {
+    projectStore.currentFile.content = updatedContent
+  }
+  // Projedeki dosyayı da güncelle (3D view activeProject.files'a bakıyor)
+  if (projectStore.activeProject) {
+    const file = projectStore.activeProject.files.find(f => f.id === projectStore.currentFile?.id)
+    if (file) {
+      file.content = updatedContent
+    }
+  }
+
+  // 2. Backend'e kaydet
+  if (projectStore.activeProjectId && projectStore.currentFile?.id) {
+    await projectStore.saveFileToBackend(
+      projectStore.activeProjectId,
+      projectStore.currentFile.id,
+      updatedContent,
+    )
+    console.log('[Chat] Dosya backend\'e kaydedildi')
+  }
+
+  applied.value = true
 }
 
 const handleReject = () => {
-  console.log('Reddet')
+  applied.value = true
 }
 </script>
 
@@ -320,6 +381,20 @@ const handleReject = () => {
 }
 
 .action-btn :deep(svg) {
+  width: 14px;
+  height: 14px;
+}
+
+.applied-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--accent-green);
+  font-weight: 500;
+}
+
+.applied-badge :deep(svg) {
   width: 14px;
   height: 14px;
 }
