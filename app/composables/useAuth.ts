@@ -151,7 +151,7 @@ export function useAuth() {
   async function loginToBackend(token: string) {
     try {
       const config = useRuntimeConfig()
-      const baseUrl = config.public.apiBase || 'http://45.88.137.131:8004'
+      const baseUrl = config.public.apiBase || 'https://structapp.xyz'
       const resp = await fetch(`${baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

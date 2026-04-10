@@ -5,8 +5,8 @@
 import { getAuth } from 'firebase/auth'
 
 const API_BASE = import.meta.client
-  ? (window as any).__NUXT__?.config?.public?.apiBase || 'http://45.88.137.131:8004'
-  : 'http://45.88.137.131:8004'
+  ? (window as any).__NUXT__?.config?.public?.apiBase || 'https://structapp.xyz'
+  : 'https://structapp.xyz'
 
 async function getToken(): Promise<string | null> {
   try {
