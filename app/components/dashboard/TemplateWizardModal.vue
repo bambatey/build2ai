@@ -564,56 +564,39 @@ async function createProject() {
   const name = projectName.value.trim()
   if (!name) return
 
-  const id = crypto.randomUUID()
   const c = config.value
   const fileName = `${name}.s2k`
   const content = buildS2KContent(name, c)
 
-  // Agent bağlıysa ve klasör seçili ise dosyayı diske yaz; başarılıysa
-  // projeyi agent path'iyle bağla, sidebar'daki yerel klasör listesini
-  // tazele.
-  let storedAt: string | null = null
+  const tags = [
+    'şablon',
+    `${c.gridX}x${c.gridY}`,
+    `${c.numFloors}kat`,
+    ...c.materials,
+  ]
+
+  // 1. Backend'de proje oluştur
+  const project = await projectStore.createProjectOnBackend(name, '.s2k', tags)
+  if (!project) {
+    console.error('Proje oluşturulamadı')
+    return
+  }
+
+  // 2. S2K dosyasını backend'e yükle
+  await projectStore.createFileOnBackend(project.id, fileName, content, '.s2k')
+
+  // 3. Agent bağlıysa local'e de yaz
   if (agent.connected.value && agent.root.value) {
     try {
-      const written = await agent.writeFile(fileName, content)
-      storedAt = written.path
+      await agent.writeFile(fileName, content)
       await agent.refreshFiles()
     } catch (err) {
-      console.error('Agent yazma başarısız, sadece tarayıcıda tutuluyor', err)
+      console.error('Agent yazma başarısız', err)
     }
   }
 
-  const fileNode: FileNode = {
-    id: crypto.randomUUID(),
-    name: fileName,
-    type: 'file',
-    path: storedAt ? `agent://${storedAt}` : `/${name}/${fileName}`,
-    format: '.s2k',
-    size: content.length,
-    lineCount: content.split('\n').length,
-    lastModified: new Date(),
-    content,
-  }
-
-  const project: Project = {
-    id,
-    name,
-    format: '.s2k',
-    fileCount: 1,
-    lastModified: new Date(),
-    progress: 0,
-    tags: [
-      'şablon',
-      `${c.gridX}x${c.gridY}`,
-      `${c.numFloors}kat`,
-      ...c.materials,
-      ...(storedAt ? ['yerel'] : []),
-    ],
-    files: [fileNode],
-  }
-
-  projectStore.addProject(project)
-  projectStore.openProject(id)
+  // 4. Projeyi aç
+  await projectStore.openProject(project.id)
   close()
   router.push('/workspace')
 }

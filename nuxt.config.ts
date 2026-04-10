@@ -39,13 +39,9 @@ export default defineNuxtConfig({
       tailwindcss(),
     ],
     server: {
-      // proxy: {
-      //   '/api/call-center-insights': {
-      //     target: 'http://localhost:8016',
-      //     changeOrigin: true,
-      //     rewrite: (path) => path.replace('/api/call-center-insights', '')
-      //   }
-      // }
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      },
     }
   },
   nitro: {
@@ -62,7 +58,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8000'
     }
   },
   experimental: {

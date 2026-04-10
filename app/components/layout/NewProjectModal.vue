@@ -114,13 +114,14 @@ const confirm = async () => {
     }
   }
 
-  const project = projectStore.commitPendingProject({ storedAt })
+  const project = await projectStore.commitPendingProject({ storedAt })
   chatStore.activeSessionId = null
   chatStore.messages = []
   if (project) {
-    chatStore.createChat(project.id)
+    await chatStore.createChat(project.id)
   }
-  projectStore.cancelNewProject()
+  // Modal'ı en son kapat — async işlemler bittikten sonra
+  projectStore.isNewProjectModalOpen = false
   router.push('/workspace')
 }
 </script>

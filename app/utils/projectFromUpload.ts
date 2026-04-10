@@ -1,16 +1,12 @@
 /**
- * Shared "user uploaded a file → make it a project" pipeline.
+ * "User uploaded a file → create project on backend" pipeline.
  *
- * Used by the dashboard upload modal and any other entry point that
- * needs to ingest a local file. If the StructAI agent is connected and
- * has a watched root, the file is also copied into that folder so the
- * native filesystem mirror stays in sync. The created project is bound
- * to the agent path when the copy succeeds; otherwise it falls back to
- * an in-memory only project.
+ * 1. Backend'de proje oluşturur
+ * 2. Dosyayı Firebase Storage'a yükler
+ * 3. Projeyi açar ve workspace'e yönlendirir
  */
 
 import type { Router } from 'vue-router'
-import type { Project } from '~/stores/project'
 import type { useProjectStore } from '~/stores/project'
 import type { useAgent } from '~/composables/useAgent'
 
@@ -23,56 +19,34 @@ interface Deps {
 export async function createProjectFromUpload(
   file: File,
   { projectStore, agent, router }: Deps,
-): Promise<Project> {
+): Promise<void> {
   const ext = '.' + (file.name.split('.').pop()?.toLowerCase() ?? '')
   const baseName = file.name.replace(/\.[^.]+$/, '')
 
-  let content: string
-  try {
-    content = await file.text()
-  } catch {
-    throw new Error('Dosya okunamadı')
+  // 1. Backend'de proje oluştur
+  const project = await projectStore.createProjectOnBackend(baseName, ext)
+  if (!project) {
+    throw new Error('Proje oluşturulamadı')
   }
 
-  // If the agent is reachable, copy the upload into the watched folder so
-  // it lives alongside everything else the user is working on.
-  let storedAt: string | null = null
+  // 2. Dosyayı backend'e yükle (Firebase Storage'a gider)
+  const fileNode = await projectStore.uploadFileToBackend(project.id, file)
+  if (!fileNode) {
+    console.error('Dosya yüklenemedi ama proje oluşturuldu')
+  }
+
+  // 3. Agent bağlıysa dosyayı local'e de kopyala
   if (agent.connected.value && agent.root.value) {
     try {
-      const written = await agent.writeFile(file.name, content)
-      storedAt = written.path
+      const content = await file.text()
+      await agent.writeFile(file.name, content)
       await agent.refreshFiles()
     } catch (err) {
-      // Non-fatal: the project still works as an in-memory copy.
       console.error('Agent yazma başarısız', err)
     }
   }
 
-  const id = crypto.randomUUID()
-  const project: Project = {
-    id,
-    name: baseName,
-    format: ext,
-    fileCount: 1,
-    lastModified: new Date(),
-    progress: 0,
-    tags: storedAt ? ['yerel'] : [],
-    files: [
-      {
-        id: crypto.randomUUID(),
-        name: file.name,
-        type: 'file',
-        path: storedAt ? `agent://${storedAt}` : `/${baseName}/${file.name}`,
-        format: ext,
-        size: file.size,
-        lastModified: new Date(),
-        content,
-      },
-    ],
-  }
-
-  projectStore.addProject(project)
-  projectStore.openProject(id)
+  // 4. Projeyi aç
+  await projectStore.openProject(project.id)
   router.push('/workspace')
-  return project
 }

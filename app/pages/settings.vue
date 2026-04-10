@@ -10,6 +10,46 @@
 
     <!-- Settings Sections -->
     <div class="settings-content">
+      <!-- Hesap -->
+      <div class="settings-section">
+        <h2 class="section-title">Hesap</h2>
+
+        <div class="settings-items">
+          <div class="setting-item">
+            <div class="setting-label">
+              <label>Kullanıcı</label>
+            </div>
+            <div class="account-info">
+              <div class="account-avatar">
+                {{ authUser?.email?.charAt(0).toUpperCase() || '?' }}
+              </div>
+              <div class="account-details">
+                <span class="account-name">{{ authUser?.displayName || authUser?.email?.split('@')[0] || '-' }}</span>
+                <span class="account-email">{{ authUser?.email || 'Giriş yapılmamış' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label>UID</label>
+              <span class="setting-help">Firebase kullanıcı kimliği</span>
+            </div>
+            <div class="uid-display">{{ authUser?.uid || '-' }}</div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label>Oturum</label>
+            </div>
+            <button @click="handleLogout" class="btn btn-danger">
+              <Icon name="lucide:log-out" />
+              Çıkış Yap
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Genel Ayarlar -->
       <div class="settings-section">
         <h2 class="section-title">Genel</h2>
@@ -267,6 +307,8 @@ useSeoMeta({
 const settingsStore = useSettingsStore()
 const chatStore = useChatStore()
 const agent = useAgent()
+const router = useRouter()
+const { user: authUser, signOut } = useAuth()
 
 const showApiKey = ref(false)
 
@@ -283,6 +325,11 @@ const handleReset = () => {
   if (confirm('Tüm ayarları sıfırlamak istediğinizden emin misiniz?')) {
     settingsStore.resetToDefaults()
   }
+}
+
+const handleLogout = async () => {
+  await signOut()
+  router.push('/login')
 }
 </script>
 
@@ -574,6 +621,58 @@ input:checked + .toggle-slider:before {
   display: flex;
   gap: 1rem;
   padding-top: 1rem;
+}
+
+/* Account Info */
+.account-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.account-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent-blue);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.account-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.account-email {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.uid-display {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.625rem 0.875rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  user-select: all;
 }
 
 /* Responsive */

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useProjectStore } from '~/stores/project'
+import { apiGet, apiPost, API_BASE } from '~/utils/api'
 
 export interface ChatMessage {
   id: string
@@ -30,45 +31,13 @@ export interface ChatSession {
   lastActive: Date
 }
 
-const CHAT_STORAGE_KEY = 'structai:chat-state'
-
-interface PersistedChatState {
-  sessions: ChatSession[]
-  activeSessionId: string | null
-}
-
-function loadPersistedChat(): PersistedChatState {
-  if (typeof window === 'undefined') return { sessions: [], activeSessionId: null }
-  try {
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY)
-    if (!raw) return { sessions: [], activeSessionId: null }
-    const parsed = JSON.parse(raw) as PersistedChatState
-    // Revive Date objects
-    parsed.sessions.forEach(s => {
-      s.createdAt = new Date(s.createdAt)
-      s.lastActive = new Date(s.lastActive)
-      s.messages.forEach(m => { m.timestamp = new Date(m.timestamp) })
-    })
-    return parsed
-  } catch {
-    return { sessions: [], activeSessionId: null }
-  }
-}
-
-function persistChat(state: PersistedChatState) {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(state))
-  } catch {
-    // ignore
-  }
-}
+// API_BASE import edildi
 
 export const useChatStore = defineStore('chat', {
   state: () => ({
     messages: [] as ChatMessage[],
     isLoading: false,
-    model: 'claude-opus-4-6' as string,
+    model: '' as string,  // Boş = backend'in default modeli kullanılır
     quickCommands: [
       {
         id: '1',
@@ -152,12 +121,11 @@ export const useChatStore = defineStore('chat', {
 
   actions: {
     async sendMessage(content: string) {
-      // Eğer bekleyen yeni proje taslağı varsa, önce onu kaydet
       const projectStore = useProjectStore()
       if (projectStore.pendingNewProjectName && !projectStore.activeProjectId) {
-        const project = projectStore.commitPendingProject()
+        const project = await projectStore.commitPendingProject()
         if (project) {
-          this.createChat(project.id)
+          await this.createChat(project.id)
         }
       }
 
@@ -183,164 +151,143 @@ export const useChatStore = defineStore('chat', {
       }
       this.messages.push(aiMessage)
 
-      // Aktif oturum lastActive güncelle
+      // Aktif oturum güncelle
       const active = this.sessions.find(s => s.id === this.activeSessionId)
       if (active) {
         active.lastActive = new Date()
-        // Başlık boşsa ilk mesajdan türet
         if (active.name === 'Yeni Sohbet' && content.trim()) {
           active.name = content.trim().slice(0, 40)
         }
       }
-      this.persistChatState()
 
-      // Simüle edilmiş AI yanıtı (mock)
-      await this.simulateAIResponse(aiMessage.id, content)
-      this.persistChatState()
+      // ---! Backend'e streaming istek at
+      await this.streamFromBackend(aiMessage.id, content)
     },
 
-    async simulateAIResponse(messageId: string, userPrompt: string) {
-      // 1-2 saniye bekle (typing animasyonu için)
-      await new Promise(resolve => setTimeout(resolve, 1500))
+    async streamFromBackend(messageId: string, userPrompt: string) {
+      const projectStore = useProjectStore()
+      const activeSession = this.sessions.find(s => s.id === this.activeSessionId)
 
-      // Mock AI yanıtı
-      const responses = this.generateMockResponse(userPrompt)
+      // Mesaj geçmişini hazırla (son 20 mesaj)
+      const recentMessages = this.messages
+        .filter(m => !m.isLoading)
+        .slice(-20)
+        .map(m => ({ role: m.role, content: m.content }))
 
-      const messageIndex = this.messages.findIndex(m => m.id === messageId)
-      if (messageIndex !== -1) {
-        this.messages[messageIndex].content = responses.content
-        this.messages[messageIndex].diff = responses.diff
-        this.messages[messageIndex].isLoading = false
+      // ---! Dosya içeriğini al
+      // 1. Editörde açık dosya varsa onu kullan
+      // 2. Yoksa projedeki ilk dosyanın content'ini kullan
+      let fileContext = projectStore.modifiedContent || projectStore.originalContent || ''
+
+      if (!fileContext && projectStore.activeProject) {
+        const projectFiles = projectStore.activeProject.files || []
+        const firstFile = projectFiles.find(f => f.type === 'file' && f.content)
+        if (firstFile?.content) {
+          fileContext = firstFile.content
+        }
+      }
+
+      console.log('[Chat] File context:', fileContext ? `${fileContext.length} chars` : 'yok')
+
+      const body = {
+        session_id: this.activeSessionId || 'temp',
+        project_id: projectStore.activeProjectId || 'temp',
+        messages: recentMessages,
+        model: this.model,
+        file_context: fileContext || undefined,
+      }
+
+      try {
+        // Token'ı useAuth state'inden al
+        const { token } = useAuth()
+        const authToken = token.value
+
+        console.log('[Chat] Streaming request:', API_BASE, 'token:', authToken ? 'present' : 'missing')
+
+        const response = await fetch(`${API_BASE}/api/llm-proxy/chat/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify(body),
+        })
+
+        console.log('[Chat] Response status:', response.status)
+
+        if (!response.ok) {
+          throw new Error(`API hatası: ${response.status}`)
+        }
+
+        if (!response.body) {
+          throw new Error('Yanıt body\'si yok')
+        }
+
+        // SSE stream oku
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let fullContent = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n').filter(line => line.trim())
+
+          for (const line of lines) {
+            let jsonStr = line
+            if (line.startsWith('data: ')) {
+              jsonStr = line.slice(6)
+            }
+
+            if (!jsonStr.trim()) continue
+
+            try {
+              const parsed = JSON.parse(jsonStr)
+
+              if (parsed.type === 'delta' && parsed.content) {
+                fullContent += parsed.content
+                // Mesajı güncelle
+                const msgIndex = this.messages.findIndex(m => m.id === messageId)
+                if (msgIndex !== -1) {
+                  this.messages[msgIndex].content = fullContent
+                }
+              }
+
+              if (parsed.type === 'finish' || parsed.type === 'done') {
+                if (parsed.error) {
+                  const msgIndex = this.messages.findIndex(m => m.id === messageId)
+                  if (msgIndex !== -1) {
+                    this.messages[msgIndex].content = fullContent || `Hata: ${parsed.error}`
+                  }
+                }
+                break
+              }
+            } catch {
+              // JSON parse hatası, devam et
+            }
+          }
+        }
+
+        // Loading kapat
+        const msgIndex = this.messages.findIndex(m => m.id === messageId)
+        if (msgIndex !== -1) {
+          this.messages[msgIndex].isLoading = false
+          if (!this.messages[msgIndex].content) {
+            this.messages[msgIndex].content = 'Yanıt alınamadı.'
+          }
+        }
+      } catch (error: any) {
+        console.error('Chat streaming hatası:', error)
+        const msgIndex = this.messages.findIndex(m => m.id === messageId)
+        if (msgIndex !== -1) {
+          this.messages[msgIndex].content = `Bağlantı hatası: ${error.message}`
+          this.messages[msgIndex].isLoading = false
+        }
       }
 
       this.isLoading = false
-    },
-
-    generateMockResponse(prompt: string) {
-      const lowerPrompt = prompt.toLowerCase()
-
-      if (lowerPrompt.includes('yük') || lowerPrompt.includes('kontrol')) {
-        return {
-          content: `🔍 **Yük Kontrol Analizi**
-
-Model yükleri analiz edildi:
-
-**Yük Durumları:**
-- DL (Sabit Yükler) ✓
-- LL (Hareketli Yükler) ✓
-- EQX (Deprem X) ⚠️
-- EQY (Deprem Y) ⚠️
-- WX (Rüzgar X) ✓
-- WY (Rüzgar Y) ✓
-
-**Yük Kombinasyonları:** 24 adet tanımlı
-
-⚠️ **Tespit Edilen Sorunlar:**
-1. Deprem yüklerinde TBDY 2018 parametreleri eksik
-2. SDS ve SD1 değerleri tanımlanmamış
-3. Bina Önem Katsayısı (I) belirtilmemiş
-
-Düzeltmek ister misiniz?`,
-          diff: undefined,
-        }
-      }
-
-      if (lowerPrompt.includes('kesit') || lowerPrompt.includes('optimize')) {
-        return {
-          content: `⚡ **Kesit Optimizasyon Analizi**
-
-Kapasite oranları kontrol edildi:
-
-**Kritik Elemanlar (KO > 0.95):**
-- Kolon C23: W14x90 → KO = 0.97 ⚠️
-- Kolon C45: W14x90 → KO = 0.96 ⚠️
-- Kiriş B12: W21x62 → KO = 0.98 ⚠️
-
-**Optimize Edilebilir Elemanlar (KO < 0.70):**
-- 12 kolon: W16x67 → W14x61 (tasarruf)
-- 8 kiriş: W24x68 → W21x62 (tasarruf)
-
-💡 **Öneri:** Kritik kolonları W14x90'dan W16x77'ye yükseltmenizi öneriyorum.`,
-          diff: [
-            {
-              lineNumber: 847,
-              oldValue: 'Frame=23   Section=W14x90',
-              newValue: 'Frame=23   Section=W16x77',
-            },
-          ],
-        }
-      }
-
-      if (lowerPrompt.includes('deprem') || lowerPrompt.includes('tbdy')) {
-        return {
-          content: `🌍 **TBDY 2018 Deprem Analizi**
-
-**Mevcut Parametreler:**
-- Deprem Yer Hareketi Düzeyi: Belirtilmemiş ⚠️
-- SDS: Tanımlı değil ⚠️
-- SD1: Tanımlı değil ⚠️
-- Bina Önem Katsayısı: Belirtilmemiş ⚠️
-
-**Önerilen Değerler (İstanbul - DD-2):**
-- Deprem Yer Hareketi Düzeyi: DD-2
-- Kısa periyot spektral ivme (SDS): 1.105
-- 1 sn periyot spektral ivme (SD1): 0.462
-- Bina Önem Katsayısı (I): 1.0
-- Deprem Tasarım Sınıfı: DTS-1
-
-Bu parametreleri uygulamak ister misiniz?`,
-          diff: undefined,
-        }
-      }
-
-      if (lowerPrompt.includes('özet') || lowerPrompt.includes('model')) {
-        return {
-          content: `📊 **Model Özet Raporu**
-
-**Genel Bilgiler:**
-├─ Program: SAP2000 v26
-├─ Model Adı: Bina_Model_v3
-└─ Son Güncellenme: ${new Date().toLocaleDateString('tr-TR')}
-
-**Geometri:**
-├─ Düğüm sayısı: 847
-├─ Çerçeve eleman: 1,203
-├─ Kabuk eleman: 342
-└─ Kat sayısı: 12
-
-**Malzemeler:**
-├─ Beton: C30/37
-├─ Çelik: S420, S275JR
-└─ Donatı: B420C
-
-**Yüklemeler:**
-├─ Yük durumları: 6 adet
-├─ Yük kombinasyonları: 24 adet
-└─ Deprem spektrumu: Tanımlı değil ⚠️
-
-**Analiz Durumu:**
-├─ Son analiz: 2 saat önce
-└─ Durum: Başarılı ✓`,
-          diff: undefined,
-        }
-      }
-
-      // Varsayılan yanıt
-      return {
-        content: `Anladım. Bu konuda size yardımcı olabilirim.
-
-Lütfen daha spesifik olur musunuz? Örneğin:
-- Hangi elemanları değiştirmemi istersiniz?
-- Hangi parametreleri kontrol etmemi istersiniz?
-- Hangi yönetmeliğe göre kontrol yapayım?
-
-Yardımcı olabileceğim konular:
-✓ Yük tanımları ve kontrol
-✓ Kesit optimizasyonu
-✓ Deprem analizi (TBDY 2018)
-✓ Model raporu oluşturma`,
-        diff: undefined,
-      }
     },
 
     clearMessages() {
@@ -356,42 +303,98 @@ Yardımcı olabileceğim konular:
     },
 
     hydrate() {
-      const persisted = loadPersistedChat()
-      this.sessions = persisted.sessions
-      this.activeSessionId = persisted.activeSessionId
-      const active = this.sessions.find(s => s.id === this.activeSessionId)
-      this.messages = active ? active.messages : []
+      // Backend'den yükleme ensureSessionForProject veya fetchSessions'da yapılır
     },
 
-    persistChatState() {
-      persistChat({
-        sessions: this.sessions,
-        activeSessionId: this.activeSessionId,
-      })
-    },
-
-    createChat(projectId: string, name = 'Yeni Sohbet') {
-      const session: ChatSession = {
-        id: crypto.randomUUID(),
-        projectId,
-        name,
-        messages: [],
-        createdAt: new Date(),
-        lastActive: new Date(),
+    // ---! Backend'den oturumları yükle
+    async fetchSessions(projectId: string) {
+      try {
+        const sessions = await apiGet<any[]>(`/api/projects/${projectId}/chat/sessions`)
+        for (const s of (sessions || [])) {
+          if (!this.sessions.find(existing => existing.id === s.id)) {
+            this.sessions.push({
+              id: s.id,
+              projectId: s.project_id || projectId,
+              name: s.name || 'Sohbet',
+              messages: [],
+              createdAt: new Date(s.created_at),
+              lastActive: new Date(s.last_active),
+            })
+          }
+        }
+      } catch (e) {
+        console.error('[Chat] fetchSessions error:', e)
       }
-      this.sessions.push(session)
-      this.activeSessionId = session.id
-      this.messages = session.messages
-      this.persistChatState()
-      return session
     },
 
-    switchChat(id: string) {
+    // ---! Backend'den mesajları yükle
+    async fetchMessages(projectId: string, sessionId: string) {
+      try {
+        const messages = await apiGet<any[]>(`/api/chat/sessions/${sessionId}/messages?project_id=${projectId}`)
+        const session = this.sessions.find(s => s.id === sessionId)
+        if (session) {
+          session.messages = (messages || []).map((m: any) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: new Date(m.created_at),
+            diff: m.diff,
+          }))
+          if (this.activeSessionId === sessionId) {
+            this.messages = session.messages
+          }
+        }
+      } catch (e) {
+        console.error('[Chat] fetchMessages error:', e)
+      }
+    },
+
+    // ---! Backend'de chat oturumu oluştur
+    async createChat(projectId: string, name = 'Yeni Sohbet') {
+      try {
+        const result = await apiPost<any>(`/api/projects/${projectId}/chat/sessions`, { name })
+        const session: ChatSession = {
+          id: result.id,
+          projectId,
+          name: result.name || name,
+          messages: [],
+          createdAt: new Date(result.created_at || Date.now()),
+          lastActive: new Date(result.last_active || Date.now()),
+        }
+        this.sessions.push(session)
+        this.activeSessionId = session.id
+        this.messages = session.messages
+        console.log('[Chat] Session created:', session.id)
+        return session
+      } catch (e) {
+        console.error('[Chat] createChat error:', e)
+        // Fallback: local session
+        const session: ChatSession = {
+          id: crypto.randomUUID(),
+          projectId,
+          name,
+          messages: [],
+          createdAt: new Date(),
+          lastActive: new Date(),
+        }
+        this.sessions.push(session)
+        this.activeSessionId = session.id
+        this.messages = session.messages
+        return session
+      }
+    },
+
+    async switchChat(id: string) {
       const session = this.sessions.find(s => s.id === id)
       if (!session) return
       this.activeSessionId = id
-      this.messages = session.messages
-      this.persistChatState()
+
+      // Mesajlar yüklenmemişse backend'den çek
+      if (session.messages.length === 0) {
+        await this.fetchMessages(session.projectId, id)
+      } else {
+        this.messages = session.messages
+      }
     },
 
     deleteChat(id: string) {
@@ -400,35 +403,32 @@ Yardımcı olabileceğim konular:
         this.activeSessionId = null
         this.messages = []
       }
-      this.persistChatState()
     },
 
     renameChat(id: string, name: string) {
       const session = this.sessions.find(s => s.id === id)
       if (!session) return
       session.name = name
-      this.persistChatState()
     },
 
-    /**
-     * Ensure there's an active session for the given project.
-     * If none exists, create one. If active session belongs to another project, switch.
-     */
-    ensureSessionForProject(projectId: string) {
+    async ensureSessionForProject(projectId: string) {
       const active = this.activeSessionId
         ? this.sessions.find(s => s.id === this.activeSessionId)
         : null
 
       if (active && active.projectId === projectId) return
 
+      // Backend'den oturumları çek
+      await this.fetchSessions(projectId)
+
       const existing = this.sessions
         .filter(s => s.projectId === projectId)
         .sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime())[0]
 
       if (existing) {
-        this.switchChat(existing.id)
+        await this.switchChat(existing.id)
       } else {
-        this.createChat(projectId)
+        await this.createChat(projectId)
       }
     },
   },

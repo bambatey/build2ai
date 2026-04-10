@@ -209,9 +209,29 @@ function init() {
     }
   }
 
-  // First check immediately, then poll every 4s for auto-reconnect.
+  // First check immediately, then poll. Slow down when agent is not available.
   tick()
-  pollTimer = setInterval(tick, 4000)
+  let failCount = 0
+  const startPolling = () => {
+    pollTimer = setInterval(async () => {
+      const ok = await checkHealth()
+      if (ok) {
+        failCount = 0
+        if (root.value === null) await fetchConfig()
+        if (entries.value.length === 0) await refreshFiles()
+        if (!eventSource) openEventStream()
+      } else {
+        closeEventStream()
+        failCount++
+        // After 3 failures, slow down to 30s to reduce console noise
+        if (failCount === 3 && pollTimer) {
+          clearInterval(pollTimer)
+          pollTimer = setInterval(() => tick(), 30000)
+        }
+      }
+    }, 4000)
+  }
+  startPolling()
 
   window.addEventListener('beforeunload', () => {
     if (pollTimer) clearInterval(pollTimer)

@@ -2,12 +2,31 @@ import type { ApiNamespace } from './api-namespaces';
 import type { BusinessLogicDto } from './business-logic-dto';
 import type { ApiStreamingResponse } from './llm-proxy';
 
-const baseUrl = "/api";
+const baseUrl = "http://localhost:8000/api";
 
 // ---! Timeout configuration for long-running requests (5 minutes)
 const DEFAULT_TIMEOUT = 300000; // 5 minutes in milliseconds
 
 class ApiHandler {
+
+    private _token: string | null = null
+
+    // ---! Token'ı dışarıdan set et (useAuth composable tarafından çağrılır)
+    public setToken(token: string | null) {
+        this._token = token
+    }
+
+    // ---! Auth header'ları dahil tüm header'ları oluştur
+    private getAuthHeaders(): Record<string, string> {
+        const headers: Record<string, string> = {
+            'accept': 'application/json',
+            'Content-Type': 'application/json',
+        }
+        if (this._token) {
+            headers['Authorization'] = `Bearer ${this._token}`
+        }
+        return headers
+    }
 
     // ---! Helper method to create fetch with timeout
     private async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = DEFAULT_TIMEOUT): Promise<Response> {
@@ -41,11 +60,7 @@ class ApiHandler {
 
         const response = await fetch(url, {
             method: 'GET',
-            credentials: 'include',
-            headers: {
-                'accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
+            headers: this.getAuthHeaders(),
         });
 
         if (!response.ok) {
@@ -62,7 +77,7 @@ class ApiHandler {
         }
         const response = await this.fetchWithTimeout(url, {
             method: 'GET',
-            credentials: 'include',
+            headers: this.getAuthHeaders(),
         });
         return response.json() as Promise<T>;
     }
@@ -74,11 +89,7 @@ class ApiHandler {
         }
         const response = await this.fetchWithTimeout(url, {
             method: 'POST',
-            credentials: 'include',
-            headers: {
-                'accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
+            headers: this.getAuthHeaders(),
             body: JSON.stringify(data)
         });
 
@@ -99,13 +110,11 @@ class ApiHandler {
         if (endPoint) {
             url += `/${endPoint}`;
         }
+        const authHeaders = this.getAuthHeaders()
+        delete authHeaders['Content-Type'] // Browser will set it with boundary
         const response = await fetch(url, {
             method: 'POST',
-            credentials: 'include',
-            headers: {
-                'accept': 'application/json',
-                // Don't set Content-Type header - browser will set it automatically with boundary
-            },
+            headers: authHeaders,
             body: formData
         });
 
@@ -121,11 +130,7 @@ class ApiHandler {
         try {
             const response = await fetch(`${baseUrl}/${namespace}/${endPoint}`, {
                 method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
+                headers: this.getAuthHeaders(),
                 body: JSON.stringify(body)
             });
 

@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import { getAuth, onAuthStateChanged } from 'firebase/auth'
+import { apiGet, apiPost, apiPut, apiDelete, apiPostFormData } from '~/utils/api'
 
 export interface FileNode {
   id: string
@@ -11,6 +13,7 @@ export interface FileNode {
   lastModified?: Date
   children?: FileNode[]
   content?: string
+  storagePath?: string
 }
 
 export interface Project {
@@ -33,12 +36,6 @@ export interface Change {
   timestamp: Date
 }
 
-const STORAGE_KEY = 'structai:project-state'
-
-/**
- * Create a minimal but valid SAP2000 .s2k text with empty geometry tables.
- * Used as the starting file for newly created projects.
- */
 function createEmptyS2K(projectName: string): string {
   return [
     `$ File: ${projectName}.s2k`,
@@ -60,31 +57,6 @@ function createEmptyS2K(projectName: string): string {
   ].join('\n')
 }
 
-interface PersistedState {
-  activeProjectId: string | null
-  recentProjectIds: string[]
-}
-
-function loadPersisted(): PersistedState {
-  if (typeof window === 'undefined') return { activeProjectId: null, recentProjectIds: [] }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { activeProjectId: null, recentProjectIds: [] }
-    return JSON.parse(raw)
-  } catch {
-    return { activeProjectId: null, recentProjectIds: [] }
-  }
-}
-
-function persist(state: PersistedState) {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  } catch {
-    // ignore quota errors
-  }
-}
-
 export const useProjectStore = defineStore('project', {
   state: () => ({
     projects: [] as Project[],
@@ -96,9 +68,9 @@ export const useProjectStore = defineStore('project', {
     originalContent: '',
     modifiedContent: '',
     changes: [] as Change[],
-    // Yeni proje akışı
     isNewProjectModalOpen: false,
     pendingNewProjectName: null as string | null,
+    _loaded: false,
   }),
 
   getters: {
@@ -135,34 +107,195 @@ export const useProjectStore = defineStore('project', {
   },
 
   actions: {
-    hydrate() {
-      const persisted = loadPersisted()
-      this.activeProjectId = persisted.activeProjectId
-      this.recentProjectIds = persisted.recentProjectIds
+    // ---! Backend'den projeleri yükle
+    async fetchProjects() {
+      try {
+        const projects = await apiGet<any[]>('/api/projects')
+        this.projects = (projects || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          format: p.format || '.s2k',
+          fileCount: p.file_count || 0,
+          lastModified: new Date(p.updated_at || p.created_at),
+          progress: p.progress || 0,
+          tags: p.tags || [],
+          files: [],
+        }))
+        this._loaded = true
+
+        // Son projeleri güncelle (en son güncellenen ilk 10)
+        this.recentProjectIds = this.projects
+          .slice(0, 10)
+          .map(p => p.id)
+
+        console.log('[Project] Loaded', this.projects.length, 'projects from backend')
+      } catch (e) {
+        console.error('[Project] fetchProjects error:', e)
+      }
     },
 
-    persistState() {
-      persist({
-        activeProjectId: this.activeProjectId,
-        recentProjectIds: this.recentProjectIds,
-      })
+    // ---! Backend'den proje detayı + dosyaları yükle
+    async fetchProjectDetail(projectId: string) {
+      try {
+        const detail = await apiGet<any>(`/api/projects/${projectId}`)
+        const files: FileNode[] = (detail.files || []).map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          type: f.type || 'file',
+          path: f.path || '',
+          format: f.format,
+          size: f.size,
+          lineCount: f.line_count,
+          lastModified: f.last_modified ? new Date(f.last_modified) : undefined,
+          storagePath: f.storage_path,
+        }))
+
+        // Mevcut projeyi güncelle
+        const idx = this.projects.findIndex(p => p.id === projectId)
+        if (idx !== -1) {
+          this.projects[idx].files = files
+          this.projects[idx].fileCount = files.length
+        }
+
+        return files
+      } catch (e) {
+        console.error('[Project] fetchProjectDetail error:', e)
+        return []
+      }
     },
 
-    openProject(id: string) {
+    // ---! Dosya içeriğini backend'den yükle
+    async fetchFileContent(projectId: string, fileId: string): Promise<string> {
+      try {
+        const data = await apiGet<any>(`/api/projects/${projectId}/files/${fileId}`)
+        return data.content || ''
+      } catch (e) {
+        console.error('[Project] fetchFileContent error:', e)
+        return ''
+      }
+    },
+
+    // ---! Backend'e yeni proje oluştur
+    async createProjectOnBackend(name: string, format: string = '.s2k', tags: string[] = []): Promise<Project | null> {
+      try {
+        const result = await apiPost<any>('/api/projects', { name, format, tags })
+        const project: Project = {
+          id: result.id,
+          name: result.name,
+          format: result.format || format,
+          fileCount: 0,
+          lastModified: new Date(),
+          progress: 0,
+          tags: result.tags || tags,
+          files: [],
+        }
+        this.projects.unshift(project)
+        console.log('[Project] Created on backend:', project.id)
+        return project
+      } catch (e) {
+        console.error('[Project] createProject error:', e)
+        return null
+      }
+    },
+
+    // ---! Backend'e dosya yükle
+    async uploadFileToBackend(projectId: string, file: File): Promise<FileNode | null> {
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const result = await apiPostFormData<any>(`/api/projects/${projectId}/files/upload`, formData)
+        const fileNode: FileNode = {
+          id: result.id,
+          name: result.name,
+          type: 'file',
+          path: result.path || '',
+          format: result.format,
+          size: result.size,
+          lineCount: result.line_count,
+          storagePath: result.storage_path,
+        }
+
+        // Projenin dosya listesini güncelle
+        const project = this.projects.find(p => p.id === projectId)
+        if (project) {
+          project.files.push(fileNode)
+          project.fileCount = project.files.length
+        }
+
+        console.log('[Project] File uploaded:', fileNode.name)
+        return fileNode
+      } catch (e) {
+        console.error('[Project] uploadFile error:', e)
+        return null
+      }
+    },
+
+    // ---! Backend'e dosya oluştur (içerik ile)
+    async createFileOnBackend(projectId: string, name: string, content: string, format: string = '.s2k'): Promise<FileNode | null> {
+      try {
+        const result = await apiPost<any>(`/api/projects/${projectId}/files`, { name, format, content })
+        const fileNode: FileNode = {
+          id: result.id,
+          name: result.name,
+          type: 'file',
+          path: result.path || '',
+          format: result.format,
+          size: result.size,
+          lineCount: result.line_count,
+          storagePath: result.storage_path,
+          content,
+        }
+
+        const project = this.projects.find(p => p.id === projectId)
+        if (project) {
+          project.files.push(fileNode)
+          project.fileCount = project.files.length
+        }
+
+        return fileNode
+      } catch (e) {
+        console.error('[Project] createFile error:', e)
+        return null
+      }
+    },
+
+    // ---! Backend'de dosya içeriğini güncelle (save)
+    async saveFileToBackend(projectId: string, fileId: string, content: string) {
+      try {
+        await apiPut(`/api/projects/${projectId}/files/${fileId}`, { content })
+        console.log('[Project] File saved to backend')
+      } catch (e) {
+        console.error('[Project] saveFile error:', e)
+      }
+    },
+
+    // ---! Projeyi aç — dosyalarını ve ilk dosyanın içeriğini yükle
+    async openProject(id: string) {
       const project = this.projects.find(p => p.id === id)
       if (!project) return
 
       this.activeProjectId = id
       this.currentProject = project
+
+      // Backend'den dosyaları yükle
+      if (project.files.length === 0) {
+        const files = await this.fetchProjectDetail(id)
+        project.files = files
+      }
+
       this.files = project.files
 
-      // Update recents (most recent first, max 10)
+      // İlk dosyanın içeriğini otomatik yükle (3D görünüm ve chat için)
+      const firstFile = project.files.find(f => f.type === 'file')
+      if (firstFile && !firstFile.content) {
+        await this.openFile(firstFile)
+      }
+
+      // Recents güncelle
       this.recentProjectIds = [
         id,
         ...this.recentProjectIds.filter(pid => pid !== id),
       ].slice(0, 10)
-
-      this.persistState()
     },
 
     closeProject() {
@@ -170,7 +303,6 @@ export const useProjectStore = defineStore('project', {
       this.currentProject = null
       this.files = []
       this.currentFile = null
-      this.persistState()
     },
 
     setCurrentProject(project: Project) {
@@ -178,11 +310,21 @@ export const useProjectStore = defineStore('project', {
       this.files = project.files
     },
 
-    openFile(file: FileNode, content: string) {
+    // ---! Dosyayı editörde aç — içeriği backend'den çek
+    async openFile(file: FileNode, content?: string) {
       this.currentFile = file
-      this.originalContent = content
-      this.modifiedContent = content
+
+      // İçerik verilmediyse ve storagePath varsa backend'den çek
+      if (!content && file.storagePath && this.activeProjectId) {
+        content = await this.fetchFileContent(this.activeProjectId, file.id)
+      }
+
+      this.originalContent = content || ''
+      this.modifiedContent = content || ''
       this.changes = []
+
+      // FileNode'a da content'i kaydet (chat'e göndermek için)
+      file.content = content
     },
 
     updateFileContent(content: string) {
@@ -202,9 +344,15 @@ export const useProjectStore = defineStore('project', {
       this.changes = []
     },
 
-    applyChanges() {
+    // ---! Save — backend'e de yaz
+    async applyChanges() {
       this.originalContent = this.modifiedContent
       this.changes = []
+
+      // Backend'e kaydet
+      if (this.activeProjectId && this.currentFile?.id) {
+        await this.saveFileToBackend(this.activeProjectId, this.currentFile.id, this.modifiedContent)
+      }
     },
 
     addProject(project: Project) {
@@ -220,63 +368,66 @@ export const useProjectStore = defineStore('project', {
       this.isNewProjectModalOpen = false
     },
 
-    startNewProjectDraft(name: string) {
+    async startNewProjectDraft(name: string) {
       this.pendingNewProjectName = name.trim() || 'Yeni Proje'
-      this.isNewProjectModalOpen = false
-      // Aktif projeyi temizle ki workspace boş açılsın
+      // Modal'ı burada kapatmıyoruz — commitPendingProject bitene kadar açık kalmalı
       this.activeProjectId = null
       this.currentProject = null
       this.files = []
       this.currentFile = null
-      this.persistState()
     },
 
-    /**
-     * Bekleyen taslak proje varsa, onu gerçek bir projeye çevirir
-     * ve aktif yapar. İlk mesaj gönderildiğinde çağrılır.
-     */
-    commitPendingProject(opts?: { storedAt?: string }): Project | null {
+    async commitPendingProject(opts?: { storedAt?: string }): Promise<Project | null> {
       if (!this.pendingNewProjectName) return null
-      const id = crypto.randomUUID()
+
       const name = this.pendingNewProjectName
-      const fileName = `${name}.s2k`
-      const localPath = opts?.storedAt
-        ? `agent://${opts.storedAt}`
-        : `/${name}/${fileName}`
-      const project: Project = {
-        id,
-        name,
-        format: '.s2k',
-        fileCount: 1,
-        lastModified: new Date(),
-        progress: 0,
-        tags: opts?.storedAt ? ['yerel'] : [],
-        files: [
-          {
-            id: crypto.randomUUID(),
-            name: fileName,
-            type: 'file',
-            path: localPath,
-            format: '.s2k',
-            size: 0,
-            lastModified: new Date(),
-            content: createEmptyS2K(name),
-          },
-        ],
-      }
-      this.addProject(project)
-      this.openProject(id)
       this.pendingNewProjectName = null
+
+      // Backend'de oluştur
+      const project = await this.createProjectOnBackend(name)
+      if (!project) return null
+
+      // Boş .s2k dosyası oluştur
+      const fileName = `${name}.s2k`
+      const content = createEmptyS2K(name)
+      await this.createFileOnBackend(project.id, fileName, content)
+
+      // Projeyi aç
+      await this.openProject(project.id)
       return project
     },
 
-    deleteProject(id: string) {
+    async deleteProject(id: string) {
+      try {
+        await apiDelete(`/api/projects/${id}`)
+      } catch (e) {
+        console.error('[Project] deleteProject error:', e)
+      }
       this.projects = this.projects.filter(p => p.id !== id)
       this.recentProjectIds = this.recentProjectIds.filter(pid => pid !== id)
       if (this.activeProjectId === id) {
         this.closeProject()
-      } else {
-        this.persistState()
+      }
+    },
+
+    // ---! Hydrate — Firebase Auth hazır olduktan sonra backend'den yükle
+    async hydrate() {
+      if (this._loaded) return
+
+      // Firebase Auth'un current user'ı yüklemesini bekle
+      const auth = getAuth()
+      if (!auth.currentUser) {
+        await new Promise<void>((resolve) => {
+          const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe()
+            resolve()
+          })
+        })
+      }
+
+      // Giriş yapılmışsa projeleri çek
+      if (auth.currentUser) {
+        await this.fetchProjects()
       }
     },
   },

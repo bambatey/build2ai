@@ -65,6 +65,22 @@
       <LayoutChatHistoryList v-if="!isCollapsed" />
     </template>
 
+    <!-- User Profile -->
+    <div v-if="authUser" class="sidebar-user" :class="{ collapsed: isCollapsed }">
+      <div class="user-info" @click="router.push('/settings')">
+        <div class="user-avatar">
+          {{ authUser.email?.charAt(0).toUpperCase() || '?' }}
+        </div>
+        <div v-if="!isCollapsed" class="user-details">
+          <span class="user-name">{{ authUser.displayName || authUser.email?.split('@')[0] }}</span>
+          <span class="user-email">{{ authUser.email }}</span>
+        </div>
+      </div>
+      <button v-if="!isCollapsed" @click="handleLogout" class="logout-btn" title="Çıkış Yap">
+        <Icon name="lucide:log-out" />
+      </button>
+    </div>
+
     <!-- Collapse Toggle -->
     <button @click="toggleCollapse" class="collapse-btn">
       <Icon :name="isCollapsed ? 'lucide:chevrons-right' : 'lucide:chevrons-left'" />
@@ -82,7 +98,13 @@ const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
 const chatStore = useChatStore()
+const { user: authUser, signOut } = useAuth()
 const isCollapsed = ref(false)
+
+const handleLogout = async () => {
+  await signOut()
+  router.push('/login')
+}
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: 'lucide:layout-grid' },
@@ -373,6 +395,93 @@ onMounted(() => {
 
 .sidebar-container.collapsed .status-text {
   display: none;
+}
+
+/* User Profile */
+.sidebar-user {
+  margin-top: auto;
+  padding: 0.75rem;
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sidebar-user.collapsed {
+  justify-content: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  padding: 0.375rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.user-info:hover {
+  background: var(--bg-tertiary);
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-blue);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.user-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-email {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logout-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--accent-red);
 }
 
 /* Collapse Button */
