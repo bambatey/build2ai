@@ -4,7 +4,9 @@
  */
 import { getAuth } from 'firebase/auth'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = import.meta.client
+  ? (window as any).__NUXT__?.config?.public?.apiBase || 'http://45.88.137.131:8004'
+  : 'http://45.88.137.131:8004'
 
 async function getToken(): Promise<string | null> {
   try {

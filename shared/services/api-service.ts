@@ -2,7 +2,7 @@ import type { ApiNamespace } from './api-namespaces';
 import type { BusinessLogicDto } from './business-logic-dto';
 import type { ApiStreamingResponse } from './llm-proxy';
 
-const baseUrl = "http://localhost:8000/api";
+const baseUrl = "http://45.88.137.131:8004/api";
 
 // ---! Timeout configuration for long-running requests (5 minutes)
 const DEFAULT_TIMEOUT = 300000; // 5 minutes in milliseconds
