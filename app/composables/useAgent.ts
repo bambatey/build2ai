@@ -1,5 +1,5 @@
 /**
- * Thin client for the local StructAI agent.
+ * Thin client for the local Build2AI agent.
  *
  * The agent runs on http://127.0.0.1:7117 on the user's machine and
  * exposes a sandboxed view of one folder. This composable provides a

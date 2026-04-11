@@ -21,7 +21,7 @@
       <Icon name="lucide:plug-zap" class="empty-icon" />
       <div class="empty-title">Agent bağlı değil</div>
       <div class="empty-text">
-        StructAI Agent uygulamasını başlatın.
+        Build2AI Agent uygulamasını başlatın.
       </div>
     </div>
 

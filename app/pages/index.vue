@@ -203,7 +203,7 @@ definePageMeta({
 })
 
 useSeoMeta({
-  title: 'Dashboard - StructAI',
+  title: 'Dashboard - Build2AI',
   description: 'Yapısal mühendislik AI asistanı',
 })
 

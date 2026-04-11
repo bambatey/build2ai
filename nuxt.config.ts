@@ -6,7 +6,7 @@ config({ path: '/usr/local/etc/ai-ui/.env' });
 export default defineNuxtConfig({
   app: {
     head: {
-      title: 'AI UI',
+      title: 'Build2AI',
       meta: [
         { name: 'description', content: 'AI Uygulamaları - Ödeal' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' }

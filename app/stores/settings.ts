@@ -122,14 +122,14 @@ export const useSettingsStore = defineStore('settings', {
     // Ayarları localStorage'a kaydet
     saveToStorage() {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('structai-settings', JSON.stringify(this.$state))
+        localStorage.setItem('build2ai-settings', JSON.stringify(this.$state))
       }
     },
 
     // Ayarları localStorage'dan yükle
     loadFromStorage() {
       if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('structai-settings')
+        const saved = localStorage.getItem('build2ai-settings')
         if (saved) {
           const settings = JSON.parse(saved)
           this.$patch(settings)

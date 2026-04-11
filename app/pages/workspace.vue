@@ -91,7 +91,7 @@ definePageMeta({
 })
 
 useSeoMeta({
-  title: 'Workspace - StructAI',
+  title: 'Workspace - Build2AI',
   description: 'Yapısal model oluşturma workspace',
 })
 

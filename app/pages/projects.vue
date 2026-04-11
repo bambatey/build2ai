@@ -113,7 +113,7 @@ definePageMeta({
 })
 
 useSeoMeta({
-  title: 'Projeler - StructAI',
+  title: 'Projeler - Build2AI',
   description: 'Yapısal analiz projelerinizi yönetin',
 })
 

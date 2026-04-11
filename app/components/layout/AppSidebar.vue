@@ -7,11 +7,21 @@
     <div class="sidebar-logo">
       <NuxtLink to="/" class="logo-link">
         <div class="logo-mark">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- İzometrik küp — yapısal mühendisliğin sembolü -->
+            <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <!-- Üst yüz -->
+              <path d="M16 4 L27 10 L16 16 L5 10 Z"/>
+              <!-- Sol yüz -->
+              <path d="M5 10 L5 22 L16 28 L16 16"/>
+              <!-- Sağ yüz -->
+              <path d="M27 10 L27 22 L16 28"/>
+            </g>
+            <!-- İç dikey çizgi (orta kolon vurgusu) -->
+            <line x1="16" y1="16" x2="16" y2="28" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.4"/>
           </svg>
         </div>
-        <span v-if="!isCollapsed" class="logo-text">StructAI</span>
+        <span v-if="!isCollapsed" class="logo-text">Build2AI</span>
       </NuxtLink>
     </div>
 
@@ -181,19 +191,18 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-green);
   flex-shrink: 0;
+  color: var(--text-primary);
 }
 
 .logo-mark svg {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
 }
 
 .logo-text {
   font-size: 1.125rem;
-  font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
   letter-spacing: -0.02em;
   white-space: nowrap;
 }
@@ -227,7 +236,7 @@ onMounted(() => {
 
 .nav-item.active {
   background: var(--bg-tertiary);
-  color: var(--accent-green);
+  color: var(--accent-blue);
 }
 
 .nav-item.active::before {
@@ -238,7 +247,7 @@ onMounted(() => {
   transform: translateY(-50%);
   width: 3px;
   height: 60%;
-  background: var(--accent-green);
+  background: var(--accent-blue);
   border-radius: 0 2px 2px 0;
 }
 

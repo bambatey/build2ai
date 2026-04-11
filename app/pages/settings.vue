@@ -175,7 +175,7 @@
             <div class="setting-label">
               <label>Durum</label>
               <span class="setting-help">
-                StructAI Agent uygulaması ile bağlantı durumu
+                Build2AI Agent uygulaması ile bağlantı durumu
               </span>
             </div>
             <div class="agent-status-display">
@@ -300,7 +300,7 @@ definePageMeta({
 })
 
 useSeoMeta({
-  title: 'Ayarlar - StructAI',
+  title: 'Ayarlar - Build2AI',
   description: 'Uygulama ayarlarını yönetin',
 })
 

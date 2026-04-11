@@ -54,7 +54,7 @@ const pageTitle = computed(() => {
     '/projects': 'Projeler',
     '/settings': 'Ayarlar',
   }
-  return titles[route.path] || 'StructAI'
+  return titles[route.path] || 'Build2AI'
 })
 
 const subtitle = computed(() => {
