@@ -282,8 +282,13 @@
               <td class="muted node-cell">
                 <span class="node-id">{{ d.node_id }}</span>
                 <span v-if="hasLabels(d)" class="node-labels">
-                  <span v-if="d.axis_x || d.axis_y" class="node-aks">
-                    {{ d.axis_x ?? '?' }}-{{ d.axis_y ?? '?' }}
+                  <span
+                    v-if="axisLabel(d)"
+                    class="node-aks"
+                    :class="{ partial: isPartialAks(d) }"
+                    :title="axisTitle(d)"
+                  >
+                    {{ axisLabel(d) }}
                   </span>
                   <span v-if="d.level" class="node-level">{{ d.level }}</span>
                 </span>
@@ -315,8 +320,13 @@
               <td class="muted node-cell">
                 <span class="node-id">{{ r.node_id }}</span>
                 <span v-if="hasLabels(r)" class="node-labels">
-                  <span v-if="r.axis_x || r.axis_y" class="node-aks">
-                    {{ r.axis_x ?? '?' }}-{{ r.axis_y ?? '?' }}
+                  <span
+                    v-if="axisLabel(r)"
+                    class="node-aks"
+                    :class="{ partial: isPartialAks(r) }"
+                    :title="axisTitle(r)"
+                  >
+                    {{ axisLabel(r) }}
                   </span>
                   <span v-if="r.level" class="node-level">{{ r.level }}</span>
                 </span>
@@ -688,8 +698,35 @@ function fmt(v: number): string {
   return v.toFixed(4)
 }
 
-function hasLabels(rec: { axis_x?: string | null; axis_y?: string | null; level?: string | null }): boolean {
+type NodeLabelRec = { axis_x?: string | null; axis_y?: string | null; level?: string | null }
+
+function hasLabels(rec: NodeLabelRec): boolean {
   return !!(rec.axis_x || rec.axis_y || rec.level)
+}
+
+/** Aks etiketini oluştur:
+ *   Kolon kesişimi (her iki aks var)  → "B-3"
+ *   Sadece Y ekseni                   → "aks B"  (X arası ara nokta)
+ *   Sadece X ekseni                   → "aks 3"
+ *   Hiçbiri yok                       → ""       (gösterilmez)
+ */
+function axisLabel(rec: NodeLabelRec): string {
+  const { axis_x, axis_y } = rec
+  if (axis_x && axis_y) return `${axis_x}-${axis_y}`
+  if (axis_y) return `aks ${axis_y}`
+  if (axis_x) return `aks ${axis_x}`
+  return ''
+}
+
+function isPartialAks(rec: NodeLabelRec): boolean {
+  return !!(rec.axis_x || rec.axis_y) && !(rec.axis_x && rec.axis_y)
+}
+
+function axisTitle(rec: NodeLabelRec): string {
+  if (rec.axis_x && rec.axis_y) return `Kolon hizası: ${rec.axis_x}-${rec.axis_y}`
+  if (rec.axis_y) return `${rec.axis_y} aksı üzerinde; X ekseninde iki grid arasında (ara nokta)`
+  if (rec.axis_x) return `${rec.axis_x} aksı üzerinde; Y ekseninde iki grid arasında (ara nokta)`
+  return ''
 }
 
 function formatDisp(v: number): string {
@@ -1263,6 +1300,17 @@ function cellCls(v: number, max: number): string {
   font-weight: 700;
   letter-spacing: 0.02em;
   font-family: ui-monospace, SFMono-Regular, monospace;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Sadece tek eksen var — açıkça ayır */
+.node-aks.partial {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: normal;
 }
 
 .node-level {
