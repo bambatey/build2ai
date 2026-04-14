@@ -90,33 +90,71 @@
             <!-- Kombinasyonlar -->
             <div v-if="preview.combinations.length > 0" class="acm-section">
               <div class="section-head">
-                <h4>Yük Kombinasyonları</h4>
-                <button type="button" class="link-btn" @click="toggleAllCombos">
-                  {{ allCombosSelected ? 'Tümünü kaldır' : 'Tümünü seç' }}
-                </button>
-              </div>
-              <ul class="acm-list">
-                <li
-                  v-for="c in preview.combinations"
-                  :key="c.id"
-                  class="acm-item"
-                  :class="{ active: selectedCombos.has(c.id) }"
-                  @click="toggleCombo(c.id)"
-                >
+                <h4>Yük Kombinasyonları ({{ preview.combinations.length }})</h4>
+                <div class="section-head-actions">
                   <input
-                    type="checkbox"
-                    :checked="selectedCombos.has(c.id)"
-                    @click.stop
-                    @change="toggleCombo(c.id)"
+                    v-model="comboFilter"
+                    type="text"
+                    class="acm-mini-search"
+                    placeholder="Ara..."
                   />
-                  <div class="acm-item-main">
-                    <div class="acm-item-title">{{ c.id }}</div>
-                    <div class="acm-item-meta combo-formula">
-                      {{ formatFactors(c.factors) }}
+                  <button type="button" class="link-btn" @click="toggleAllCombos">
+                    {{ allCombosSelected ? 'Kaldır' : 'Hepsi' }}
+                  </button>
+                </div>
+              </div>
+              <ul class="acm-list acm-list-scroll">
+                <template v-for="c in filteredCombinations" :key="c.id">
+                  <li
+                    class="acm-item"
+                    :class="{ active: selectedCombos.has(c.id) }"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="selectedCombos.has(c.id)"
+                      @click.stop
+                      @change="toggleCombo(c.id)"
+                    />
+                    <div
+                      class="acm-item-main"
+                      @click.stop="toggleCombo(c.id)"
+                    >
+                      <div class="acm-item-title">{{ c.id }}</div>
+                      <div class="acm-item-meta combo-formula">
+                        {{ formatFactors(c.factors) }}
+                      </div>
                     </div>
-                  </div>
-                </li>
+                    <button
+                      type="button"
+                      class="combo-expand-btn"
+                      :title="expandedCombo === c.id ? 'Kapat' : 'Detay'"
+                      @click.stop="toggleExpanded(c.id)"
+                    >
+                      <Icon :name="expandedCombo === c.id ? 'lucide:chevron-up' : 'lucide:chevron-down'" />
+                    </button>
+                  </li>
+                  <li v-if="expandedCombo === c.id" class="combo-detail">
+                    <div class="combo-detail-title">Ayrıştırılmış faktörler:</div>
+                    <ul class="combo-detail-list">
+                      <li v-for="(sf, pat) in c.factors" :key="pat">
+                        <span
+                          class="combo-detail-sign"
+                          :class="{ negative: sf < 0 }"
+                        >{{ sf >= 0 ? '+' : '−' }}</span>
+                        <span class="combo-detail-sf">{{ Math.abs(sf).toFixed(3) }}</span>
+                        <span class="combo-detail-x">×</span>
+                        <span class="combo-detail-pat">{{ pat }}</span>
+                      </li>
+                    </ul>
+                  </li>
+                </template>
               </ul>
+              <div
+                v-if="filteredCombinations.length === 0"
+                class="acm-empty-msg"
+              >
+                Eşleşen kombinasyon yok.
+              </div>
             </div>
 
             <!-- Modal analiz -->
@@ -296,6 +334,8 @@ const spectrum = ref({
 
 const selectedCases = ref(new Set<string>())
 const selectedCombos = ref(new Set<string>())
+const comboFilter = ref('')
+const expandedCombo = ref<string | null>(null)
 
 const currentFile = computed(() => projectStore.currentFile)
 const projectId = computed(() => projectStore.activeProjectId ?? '')
@@ -311,6 +351,15 @@ const allCasesSelected = computed(
 const allCombosSelected = computed(
   () => preview.value !== null && selectedCombos.value.size === preview.value.combinations.length,
 )
+
+const filteredCombinations = computed(() => {
+  if (!preview.value) return []
+  const q = comboFilter.value.trim().toLowerCase()
+  if (!q) return preview.value.combinations
+  return preview.value.combinations.filter(c =>
+    c.id.toLowerCase().includes(q),
+  )
+})
 
 const canRun = computed(() =>
   (selectedCases.value.size > 0 || selectedCombos.value.size > 0
@@ -374,6 +423,10 @@ function toggleCombo(id: string) {
   const s = new Set(selectedCombos.value)
   if (s.has(id)) s.delete(id); else s.add(id)
   selectedCombos.value = s
+}
+
+function toggleExpanded(id: string) {
+  expandedCombo.value = expandedCombo.value === id ? null : id
 }
 
 function toggleAllCombos() {
@@ -604,6 +657,115 @@ function runAnalysis() {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
+}
+
+/* Çok kombinasyon varsa (90+) scrollable alt liste */
+.acm-list-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.acm-list-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.acm-list-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 4px;
+}
+.acm-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.section-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.acm-mini-search {
+  width: 100px;
+  padding: 0.25rem 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.acm-mini-search:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.combo-expand-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.25rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.combo-expand-btn:hover {
+  color: var(--accent-blue);
+  border-color: var(--border-default);
+}
+
+.combo-detail {
+  list-style: none;
+  margin: -0.25rem 0 0.125rem 2.25rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(59, 130, 246, 0.04);
+  border-left: 2px solid var(--accent-blue);
+  border-radius: 0 6px 6px 0;
+}
+
+.combo-detail-title {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.375rem;
+}
+
+.combo-detail-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.25rem 0.75rem;
+}
+
+.combo-detail-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.75rem;
+}
+
+.combo-detail-sign {
+  color: var(--accent-green);
+  font-weight: 700;
+  min-width: 10px;
+}
+.combo-detail-sign.negative {
+  color: #ef4444;
+}
+.combo-detail-sf {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.combo-detail-x {
+  color: var(--text-muted);
+}
+.combo-detail-pat {
+  color: var(--accent-blue);
+  font-weight: 600;
 }
 
 .acm-item {

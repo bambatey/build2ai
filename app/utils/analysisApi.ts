@@ -59,6 +59,8 @@ export interface Mode {
   period: number
   frequency: number
   angular_frequency: number
+  /** Yön bazlı kütle katılım oranı (0..1): { ux: 0.82, uy: 0.03, uz: 0.00 } */
+  mass_participation?: Record<string, number>
 }
 
 export interface ModelSummary {
@@ -199,4 +201,57 @@ export function getModes(
   analysisId: string,
 ): Promise<Mode[]> {
   return apiGet<Mode[]>(`${base(projectId, fileId)}/analyses/${analysisId}/modes`)
+}
+
+// -------------------------------------------------- Excel export URL'leri
+/** Full analiz xlsx URL'si (auth header ile fetch yapılır). */
+export function exportFullXlsxUrl(
+  projectId: string, fileId: string, analysisId: string,
+): string {
+  return `${base(projectId, fileId)}/analyses/${analysisId}/export/xlsx`
+}
+
+export function exportDisplacementsXlsxUrl(
+  projectId: string, fileId: string, analysisId: string, loadCase?: string,
+): string {
+  const qs = loadCase ? `?load_case=${encodeURIComponent(loadCase)}` : ''
+  return `${base(projectId, fileId)}/analyses/${analysisId}/export/displacements.xlsx${qs}`
+}
+
+export function exportReactionsXlsxUrl(
+  projectId: string, fileId: string, analysisId: string, loadCase?: string,
+): string {
+  const qs = loadCase ? `?load_case=${encodeURIComponent(loadCase)}` : ''
+  return `${base(projectId, fileId)}/analyses/${analysisId}/export/reactions.xlsx${qs}`
+}
+
+export function exportModesXlsxUrl(
+  projectId: string, fileId: string, analysisId: string,
+): string {
+  return `${base(projectId, fileId)}/analyses/${analysisId}/export/modes.xlsx`
+}
+
+/** XHR ile binary (xlsx) indir + auth header ekle + tarayıcıya kaydet. */
+export async function downloadXlsx(
+  url: string,
+  filename: string,
+): Promise<void> {
+  const { getAuth } = await import('firebase/auth')
+  const auth = getAuth()
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null
+  const { API_BASE } = await import('./api')
+  const fullUrl = `${API_BASE}${url}`
+  const resp = await fetch(fullUrl, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
+  const blob = await resp.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
 }

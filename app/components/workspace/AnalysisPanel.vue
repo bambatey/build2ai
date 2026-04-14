@@ -118,6 +118,61 @@
             {{ c }}
           </button>
         </div>
+        <button
+          v-if="selectedCaseFactors"
+          type="button"
+          class="case-detail-btn"
+          :class="{ active: caseDetailOpen }"
+          title="Kombinasyon içeriğini göster"
+          @click="caseDetailOpen = !caseDetailOpen"
+        >
+          <Icon name="lucide:info" />
+        </button>
+      </div>
+
+      <!-- Seçili kombinasyonun açıklaması (ana ekranda) -->
+      <div v-if="caseDetailOpen && selectedCaseFactors" class="ap-case-detail">
+        <div class="case-detail-label">{{ selectedCase }} =</div>
+        <div class="case-detail-formula">
+          <template v-for="(sf, pat, idx) in selectedCaseFactors" :key="pat">
+            <span class="sign" :class="{ neg: sf < 0 }">{{ idx === 0 ? (sf < 0 ? '−' : '') : (sf < 0 ? '−' : '+') }}</span>
+            <span class="sf">{{ Math.abs(sf).toFixed(3) }}</span>
+            <span class="x">·</span>
+            <span class="pat">{{ pat }}</span>
+          </template>
+        </div>
+      </div>
+
+      <!-- Excel indirme butonları -->
+      <div class="ap-export-bar">
+        <span class="ap-export-label">Excel indir:</span>
+        <button class="export-btn" :disabled="exporting" @click="downloadAll">
+          <Icon :name="exporting ? 'lucide:loader-2' : 'lucide:file-spreadsheet'"
+                :class="{ spin: exporting }" />
+          Tamamı
+        </button>
+        <button
+          class="export-btn"
+          :disabled="exporting || !selectedCase"
+          @click="downloadCurrent('displacements')"
+        >
+          <Icon name="lucide:move" /> Yer Değ. ({{ selectedCase || '—' }})
+        </button>
+        <button
+          class="export-btn"
+          :disabled="exporting || !selectedCase"
+          @click="downloadCurrent('reactions')"
+        >
+          <Icon name="lucide:anchor" /> Reaksiyon
+        </button>
+        <button
+          v-if="modes.length > 0"
+          class="export-btn"
+          :disabled="exporting"
+          @click="downloadModes"
+        >
+          <Icon name="lucide:waves" /> Modlar
+        </button>
       </div>
 
       <!-- Tab'lar -->
@@ -205,9 +260,13 @@
           <thead>
             <tr>
               <th>Mod</th>
-              <th>Periyot (s)</th>
-              <th>Frekans (Hz)</th>
+              <th>T (s)</th>
+              <th>f (Hz)</th>
               <th>ω (rad/s)</th>
+              <th>Mx (%)</th>
+              <th>My (%)</th>
+              <th>Mz (%)</th>
+              <th>Yön</th>
             </tr>
           </thead>
           <tbody>
@@ -216,6 +275,31 @@
               <td>{{ m.period.toFixed(4) }}</td>
               <td>{{ m.frequency.toFixed(3) }}</td>
               <td>{{ m.angular_frequency.toFixed(3) }}</td>
+              <td :class="massCls(m.mass_participation?.ux ?? 0)">
+                {{ fmtPct(m.mass_participation?.ux ?? 0) }}
+              </td>
+              <td :class="massCls(m.mass_participation?.uy ?? 0)">
+                {{ fmtPct(m.mass_participation?.uy ?? 0) }}
+              </td>
+              <td :class="massCls(m.mass_participation?.uz ?? 0)">
+                {{ fmtPct(m.mass_participation?.uz ?? 0) }}
+              </td>
+              <td>
+                <span class="mode-dir-badge" :class="modeDirClass(m)">
+                  {{ modeDirection(m) }}
+                </span>
+              </td>
+            </tr>
+            <tr class="cumrow" v-if="modes.length > 0">
+              <td colspan="4" class="muted">KÜMÜLATİF (%)</td>
+              <td :class="cumCls(cumulative.ux)">{{ fmtPct(cumulative.ux) }}</td>
+              <td :class="cumCls(cumulative.uy)">{{ fmtPct(cumulative.uy) }}</td>
+              <td :class="cumCls(cumulative.uz)">{{ fmtPct(cumulative.uz) }}</td>
+              <td class="muted">
+                <Icon v-if="cumulative.ux >= 0.95 && cumulative.uy >= 0.95"
+                      name="lucide:check-circle" class="tbdy-ok" />
+                <span v-else class="tbdy-warn">TBDY 95% ✗</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -277,6 +361,8 @@ const analysisStore = useAnalysisStore()
 const activeTab = ref<'displacements' | 'reactions' | 'modes'>('displacements')
 const warningsExpanded = ref(false)
 const configOpen = ref(false)
+const caseDetailOpen = ref(false)
+const exporting = ref(false)
 
 const currentFile = computed(() => projectStore.currentFile)
 const projectId = computed(() => projectStore.activeProjectId ?? '')
@@ -297,6 +383,25 @@ const reactions = computed(() =>
   currentFile.value ? analysisStore.filteredReactions(currentFile.value.id) : [],
 )
 const modes = computed(() => fileState.value?.modes ?? [])
+
+const selectedCaseFactors = computed<Record<string, number> | null>(() => {
+  // Kombinasyon ise preview'dan factor'ları bul
+  const p = fileState.value?.preview
+  if (!p || !selectedCase.value) return null
+  const combo = p.combinations.find(c => c.id === selectedCase.value)
+  return combo ? combo.factors : null
+})
+
+const cumulative = computed(() => {
+  const acc = { ux: 0, uy: 0, uz: 0 }
+  for (const m of modes.value) {
+    const mp = m.mass_participation ?? {}
+    acc.ux += mp.ux ?? 0
+    acc.uy += mp.uy ?? 0
+    acc.uz += mp.uz ?? 0
+  }
+  return acc
+})
 const loadCases = computed(() =>
   currentFile.value ? analysisStore.availableLoadCases(currentFile.value.id) : [],
 )
@@ -328,6 +433,86 @@ const maxAbs = computed(() => {
 function openConfig() {
   if (!canRun.value) return
   configOpen.value = true
+}
+
+function fmtPct(v: number): string {
+  return (v * 100).toFixed(2)
+}
+
+function massCls(v: number): string {
+  if (v >= 0.5) return 'heat-high'
+  if (v >= 0.1) return 'heat-mid'
+  return ''
+}
+
+function cumCls(v: number): string {
+  if (v >= 0.95) return 'cum-ok'
+  if (v >= 0.80) return 'cum-mid'
+  return 'cum-low'
+}
+
+function modeDirection(m: { mass_participation?: Record<string, number> }): string {
+  const mp = m.mass_participation ?? {}
+  const ux = mp.ux ?? 0
+  const uy = mp.uy ?? 0
+  const uz = mp.uz ?? 0
+  const max = Math.max(ux, uy, uz)
+  if (max < 0.1) return 'lokal'
+  if (max === ux) return 'X'
+  if (max === uy) return 'Y'
+  return 'Z'
+}
+
+function modeDirClass(m: { mass_participation?: Record<string, number> }): string {
+  const d = modeDirection(m)
+  return d === 'X' ? 'dir-x' : d === 'Y' ? 'dir-y' : d === 'Z' ? 'dir-z' : 'dir-local'
+}
+
+async function downloadAll() {
+  if (!currentFile.value || !projectId.value || !currentId.value) return
+  exporting.value = true
+  try {
+    const { exportFullXlsxUrl, downloadXlsx } = await import('~/utils/analysisApi')
+    const url = exportFullXlsxUrl(projectId.value, currentFile.value.id, currentId.value)
+    await downloadXlsx(url, `analiz_${currentId.value}.xlsx`)
+  } catch (e) {
+    console.error('[Export] error:', e)
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function downloadCurrent(kind: 'displacements' | 'reactions') {
+  if (!currentFile.value || !projectId.value || !currentId.value || !selectedCase.value) return
+  exporting.value = true
+  try {
+    const api = await import('~/utils/analysisApi')
+    const urlFn = kind === 'displacements'
+      ? api.exportDisplacementsXlsxUrl
+      : api.exportReactionsXlsxUrl
+    const url = urlFn(
+      projectId.value, currentFile.value.id, currentId.value, selectedCase.value,
+    )
+    await api.downloadXlsx(url, `${kind}_${selectedCase.value}.xlsx`)
+  } catch (e) {
+    console.error('[Export] error:', e)
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function downloadModes() {
+  if (!currentFile.value || !projectId.value || !currentId.value) return
+  exporting.value = true
+  try {
+    const api = await import('~/utils/analysisApi')
+    const url = api.exportModesXlsxUrl(projectId.value, currentFile.value.id, currentId.value)
+    await api.downloadXlsx(url, `modlar_${currentId.value}.xlsx`)
+  } catch (e) {
+    console.error('[Export] error:', e)
+  } finally {
+    exporting.value = false
+  }
 }
 
 async function handleRunWithOptions(options: Record<string, unknown>) {
@@ -764,6 +949,140 @@ function cellCls(v: number, max: number): string {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
   font-weight: 600;
+}
+
+.ap-table tr.cumrow td {
+  background: rgba(59, 130, 246, 0.06);
+  border-top: 2px solid var(--border-default);
+  font-weight: 700;
+}
+.ap-table td.cum-ok {
+  color: var(--accent-green);
+  font-weight: 700;
+}
+.ap-table td.cum-mid {
+  color: #f59e0b;
+  font-weight: 600;
+}
+.ap-table td.cum-low {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.mode-dir-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.dir-x { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.dir-y { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.dir-z { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.dir-local { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+
+.tbdy-ok { color: var(--accent-green); width: 16px; height: 16px; }
+.tbdy-warn {
+  color: #ef4444;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+/* Seçili kombinasyonun ana ekranda detayı */
+.case-detail-btn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 0.25rem 0.375rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.case-detail-btn:hover,
+.case-detail-btn.active {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.ap-case-detail {
+  margin: 0.25rem 1.5rem 0.5rem;
+  padding: 0.625rem 0.875rem;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+.case-detail-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.case-detail-formula {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem;
+  color: var(--text-primary);
+}
+.case-detail-formula .sign {
+  color: var(--accent-green);
+  font-weight: 700;
+}
+.case-detail-formula .sign.neg {
+  color: #ef4444;
+}
+.case-detail-formula .sf {
+  font-variant-numeric: tabular-nums;
+}
+.case-detail-formula .x {
+  color: var(--text-muted);
+}
+.case-detail-formula .pat {
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+/* Excel export bar */
+.ap-export-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1.5rem;
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+.ap-export-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-right: 0.25rem;
+}
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.export-btn:hover:not(:disabled) {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .ap-table td.positive {
