@@ -279,7 +279,15 @@
           </thead>
           <tbody>
             <tr v-for="d in displacements" :key="`${d.load_case}-${d.node_id}`">
-              <td class="muted">{{ d.node_id }}</td>
+              <td class="muted node-cell">
+                <span class="node-id">{{ d.node_id }}</span>
+                <span v-if="hasLabels(d)" class="node-labels">
+                  <span v-if="d.axis_x || d.axis_y" class="node-aks">
+                    {{ d.axis_x ?? '?' }}-{{ d.axis_y ?? '?' }}
+                  </span>
+                  <span v-if="d.level" class="node-level">{{ d.level }}</span>
+                </span>
+              </td>
               <td :class="cellCls(d.ux, maxAbs.ux)">{{ fmt(d.ux) }}</td>
               <td :class="cellCls(d.uy, maxAbs.uy)">{{ fmt(d.uy) }}</td>
               <td :class="cellCls(d.uz, maxAbs.uz)">{{ fmt(d.uz) }}</td>
@@ -304,7 +312,15 @@
           </thead>
           <tbody>
             <tr v-for="r in reactions" :key="`${r.load_case}-${r.node_id}`">
-              <td class="muted">{{ r.node_id }}</td>
+              <td class="muted node-cell">
+                <span class="node-id">{{ r.node_id }}</span>
+                <span v-if="hasLabels(r)" class="node-labels">
+                  <span v-if="r.axis_x || r.axis_y" class="node-aks">
+                    {{ r.axis_x ?? '?' }}-{{ r.axis_y ?? '?' }}
+                  </span>
+                  <span v-if="r.level" class="node-level">{{ r.level }}</span>
+                </span>
+              </td>
               <td>{{ fmt(r.fx) }}</td>
               <td>{{ fmt(r.fy) }}</td>
               <td :class="r.fz > 0 ? 'positive' : ''">{{ fmt(r.fz) }}</td>
@@ -670,6 +686,10 @@ onMounted(() => {
 function fmt(v: number): string {
   if (Math.abs(v) < 1e-4) return v === 0 ? '0' : v.toExponential(2)
   return v.toFixed(4)
+}
+
+function hasLabels(rec: { axis_x?: string | null; axis_y?: string | null; level?: string | null }): boolean {
+  return !!(rec.axis_x || rec.axis_y || rec.level)
 }
 
 function formatDisp(v: number): string {
@@ -1212,6 +1232,47 @@ function cellCls(v: number, max: number): string {
 
 .ap-table td.muted {
   color: var(--text-muted);
+}
+
+.node-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: left !important;
+}
+
+.node-id {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 24px;
+}
+
+.node-labels {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.node-aks {
+  display: inline-block;
+  padding: 0.0625rem 0.375rem;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.node-level {
+  display: inline-block;
+  padding: 0.0625rem 0.375rem;
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
 }
 
 .ap-table td.heat-mid {

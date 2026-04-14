@@ -98,7 +98,14 @@ export interface AnalysisListItem {
   summary: ModelSummary | null
 }
 
-export interface NodeDisplacement {
+/** GRID LINES tablosundan türetilmiş aks/kat etiketleri. */
+export interface NodeLabels {
+  axis_x?: string | null
+  axis_y?: string | null
+  level?: string | null
+}
+
+export interface NodeDisplacement extends NodeLabels {
   node_id: number
   load_case: string
   ux: number
@@ -109,7 +116,7 @@ export interface NodeDisplacement {
   rz: number
 }
 
-export interface Reaction {
+export interface Reaction extends NodeLabels {
   node_id: number
   load_case: string
   fx: number
