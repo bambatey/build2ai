@@ -2,7 +2,11 @@ import type { ApiNamespace } from './api-namespaces';
 import type { BusinessLogicDto } from './business-logic-dto';
 import type { ApiStreamingResponse } from './llm-proxy';
 
-const baseUrl = "https://structapp.xyz/api";
+// API base URL env'den alınır; yoksa structapp domaini kullanılır.
+const ENV_BASE = (typeof process !== 'undefined' && process.env?.NUXT_PUBLIC_API_BASE)
+    || (typeof window !== 'undefined' && (window as any).__NUXT__?.config?.public?.apiBase)
+    || 'https://structapp.xyz';
+const baseUrl = `${ENV_BASE.replace(/\/$/, '')}/api`;
 
 // ---! Timeout configuration for long-running requests (5 minutes)
 const DEFAULT_TIMEOUT = 300000; // 5 minutes in milliseconds

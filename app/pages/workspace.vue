@@ -13,6 +13,7 @@
             <WorkspaceDrawingCanvas v-if="leftView === 'canvas'" @export="handleSketchExport" />
             <WorkspaceAdvancedOptions v-else-if="leftView === 'advanced'" />
             <WorkspaceModel3DPreview v-else-if="leftView === '3d'" />
+            <WorkspaceAnalysisPanel v-else-if="leftView === 'analysis'" />
 
             <!-- Floating View Toggle -->
             <div class="view-toggle floating">
@@ -42,6 +43,15 @@
                 @click="leftView = '3d'"
               >
                 <Icon name="lucide:box" />
+              </button>
+              <button
+                type="button"
+                class="toggle-btn"
+                :class="{ active: leftView === 'analysis' }"
+                title="Yapısal Analiz"
+                @click="leftView = 'analysis'"
+              >
+                <Icon name="lucide:bar-chart-3" />
               </button>
             </div>
           </div>
@@ -102,7 +112,7 @@ const projectStore = useProjectStore()
 
 const isNewMode = computed(() => route.query.mode === 'new')
 const activeProject = computed(() => projectStore.activeProject)
-const leftView = ref<'canvas' | 'advanced' | '3d'>('canvas')
+const leftView = ref<'canvas' | 'advanced' | '3d' | 'analysis'>('canvas')
 
 // Panel widths
 const drawingWidth = ref(700)

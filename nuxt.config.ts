@@ -1,7 +1,16 @@
 import tailwindcss from "@tailwindcss/vite";
 import { config } from 'dotenv';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Önce sistem geneli config (düşük öncelik)
 config({ path: '/usr/local/etc/ai-ui/.env' });
+// Sonra proje yerel .env (yüksek öncelik — yerel dev için kritik)
+config({ path: resolve(__dirname, '.env'), override: true });
+
+console.log('[nuxt.config] NUXT_PUBLIC_API_BASE =', process.env.NUXT_PUBLIC_API_BASE);
 
 export default defineNuxtConfig({
   app: {

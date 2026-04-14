@@ -31,7 +31,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 
 export async function apiGet<T = any>(path: string): Promise<T> {
   const headers = await authHeaders()
-  console.log(`[API] GET ${path}`, 'token:', headers.Authorization ? 'present' : 'MISSING')
+  console.log(`[API] GET ${API_BASE}${path}`, 'token:', headers.Authorization ? 'present' : 'MISSING')
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'GET',
     headers,
@@ -44,7 +44,7 @@ export async function apiGet<T = any>(path: string): Promise<T> {
 
 export async function apiPost<T = any>(path: string, body?: any): Promise<T> {
   const headers = await authHeaders()
-  console.log(`[API] POST ${path}`, 'token:', headers.Authorization ? 'present' : 'MISSING')
+  console.log(`[API] POST ${API_BASE}${path}`, 'token:', headers.Authorization ? 'present' : 'MISSING')
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers,

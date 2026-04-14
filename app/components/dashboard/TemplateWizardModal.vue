@@ -529,9 +529,12 @@ function buildS2KContent(name: string, c: TemplateConfig): string {
   }
 
   // Frame sections (column + beam)
+  // TorsConst (J) ~ β × b × h³ formülü ile hesaplı (rectangular section):
+  //   40×40: J ≈ 3,61E-03 m⁴
+  //   25×50: J ≈ 1,79E-03 m⁴
   L.push(`TABLE:  "FRAME SECTION PROPERTIES 01 - GENERAL"`)
-  L.push(`   SectionName=COL40x40   Material=${primaryConc}   Shape=Rectangular   t3=0,4   t2=0,4   Area=0,16   I33=2,1333E-03   I22=2,1333E-03   ConcCol=Yes   ConcBeam=No   Color=Blue`)
-  L.push(`   SectionName=BEAM25x50   Material=${primaryConc}   Shape=Rectangular   t3=0,5   t2=0,25   Area=0,125   I33=2,6042E-03   I22=6,5104E-04   ConcCol=No   ConcBeam=Yes   Color=Green`)
+  L.push(`   SectionName=COL40x40   Material=${primaryConc}   Shape=Rectangular   t3=0,4   t2=0,4   Area=0,16   TorsConst=3,61E-03   I33=2,1333E-03   I22=2,1333E-03   AS2=0,1333   AS3=0,1333   ConcCol=Yes   ConcBeam=No   Color=Blue`)
+  L.push(`   SectionName=BEAM25x50   Material=${primaryConc}   Shape=Rectangular   t3=0,5   t2=0,25   Area=0,125   TorsConst=1,79E-03   I33=2,6042E-03   I22=6,5104E-04   AS2=0,1042   AS3=0,1042   ConcCol=No   ConcBeam=Yes   Color=Green`)
   L.push(` `)
 
   // Joint coordinates (her grid noktası, her kat)
@@ -595,6 +598,39 @@ function buildS2KContent(name: string, c: TemplateConfig): string {
   L.push(`   LoadPat=Q   DesignType=Live   SelfWtMult=0`)
   L.push(`   LoadPat=EQX   DesignType=Quake   SelfWtMult=0`)
   L.push(`   LoadPat=EQY   DesignType=Quake   SelfWtMult=0`)
+  L.push(` `)
+
+  // Joint Restraints — zemin katındaki (k=0) tüm düğümler tam ankastre
+  L.push(`TABLE:  "JOINT RESTRAINT ASSIGNMENTS"`)
+  for (let j = 0; j < c.gridY; j++) {
+    for (let i = 0; i < c.gridX; i++) {
+      const baseJoint = j * c.gridX + i + 1   // k=0 düğüm id'leri
+      L.push(`   Joint=${baseJoint}   U1=Yes   U2=Yes   U3=Yes   R1=Yes   R2=Yes   R3=Yes`)
+    }
+  }
+  L.push(` `)
+
+  // Frame Section Assignments — ilk N frame kolon, gerisi kiriş
+  // Oluşturma sırası: önce kolonlar (numFloors × pointsPerFloor adet),
+  // sonra X-kirişler, sonra Y-kirişler.
+  const numColumns = c.numFloors * pointsPerFloor
+  const totalFrames = frameId - 1
+  L.push(`TABLE:  "FRAME SECTION ASSIGNMENTS"`)
+  for (let fid = 1; fid <= totalFrames; fid++) {
+    const sec = fid <= numColumns ? 'COL40x40' : 'BEAM25x50'
+    L.push(`   Frame=${fid}   SectionType=Rectangular   AutoSelect=N.A.   AnalSect=${sec}   DesignSect=${sec}   MatProp=Default`)
+  }
+  L.push(` `)
+
+  // Frame Loads - Distributed — kirişlere ölü ve hareketli yük
+  // Tipik konut: G ≈ 15 kN/m (kaplama + kısmi döşeme), Q ≈ 5 kN/m
+  const G_OVER_L = 15
+  const Q_OVER_L = 5
+  L.push(`TABLE:  "FRAME LOADS - DISTRIBUTED"`)
+  for (let fid = numColumns + 1; fid <= totalFrames; fid++) {
+    L.push(`   Frame=${fid}   LoadPat=G   CoordSys=GLOBAL   Type=Force   Dir=Gravity   DistType=RelDist   RelDistA=0   RelDistB=1   FOverLA=${num(G_OVER_L)}   FOverLB=${num(G_OVER_L)}`)
+    L.push(`   Frame=${fid}   LoadPat=Q   CoordSys=GLOBAL   Type=Force   Dir=Gravity   DistType=RelDist   RelDistA=0   RelDistB=1   FOverLA=${num(Q_OVER_L)}   FOverLB=${num(Q_OVER_L)}`)
+  }
   L.push(` `)
 
   L.push(`END TABLE DATA`)

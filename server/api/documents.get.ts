@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
     console.log('Server route received query:', query);
     console.log('Document type:', documentType);
 
-    const url = `http://127.0.0.1:8027/documents?document_type=${documentType}`;
+    const url = `https://structapp.xyz/documents?document_type=${documentType}`;
     console.log('Fetching from:', url);
 
     const response = await fetch(url, {
