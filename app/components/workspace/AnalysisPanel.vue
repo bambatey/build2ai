@@ -103,21 +103,27 @@
         </div>
       </div>
 
-      <!-- Yük durumu seçici -->
-      <div v-if="loadCases.length > 0" class="ap-case-selector">
+      <!-- Yük durumu seçici — dropdown -->
+      <div v-if="loadCases.length > 0" class="ap-case-selector" ref="caseSelectorRef">
         <label class="selector-label">Yük durumu:</label>
-        <div class="selector-pills">
-          <button
-            v-for="c in loadCases"
-            :key="c"
-            type="button"
-            class="pill"
-            :class="{ active: selectedCase === c }"
-            @click="analysisStore.setLoadCase(currentFile!.id, c)"
-          >
-            {{ c }}
-          </button>
-        </div>
+
+        <!-- Kapalı görünüm: seçili case + dropdown ok -->
+        <button
+          type="button"
+          class="case-dropdown-trigger"
+          :class="{ open: caseDropdownOpen }"
+          @click="caseDropdownOpen = !caseDropdownOpen"
+        >
+          <span class="trigger-pill" :class="{ combo: isSelectedCombo }">
+            {{ selectedCase || 'Seç…' }}
+          </span>
+          <span class="trigger-count">{{ loadCases.length }}</span>
+          <Icon
+            :name="caseDropdownOpen ? 'lucide:chevron-up' : 'lucide:chevron-down'"
+            class="trigger-chevron"
+          />
+        </button>
+
         <button
           v-if="selectedCaseFactors"
           type="button"
@@ -128,6 +134,59 @@
         >
           <Icon name="lucide:info" />
         </button>
+
+        <!-- Açık dropdown paneli -->
+        <div v-if="caseDropdownOpen" class="case-dropdown-panel" @click.stop>
+          <div class="case-dropdown-search">
+            <Icon name="lucide:search" class="search-icon" />
+            <input
+              v-model="caseSearchQuery"
+              type="text"
+              placeholder="Yük durumu ara..."
+              class="case-search-input"
+              ref="caseSearchInputRef"
+            />
+          </div>
+
+          <div v-if="filteredPatternCases.length > 0" class="case-group">
+            <div class="case-group-label">Yük Patternleri ({{ filteredPatternCases.length }})</div>
+            <div class="case-group-pills">
+              <button
+                v-for="c in filteredPatternCases"
+                :key="c"
+                type="button"
+                class="pill"
+                :class="{ active: selectedCase === c }"
+                @click="selectCase(c)"
+              >
+                {{ c }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="filteredComboCases.length > 0" class="case-group">
+            <div class="case-group-label">Kombinasyonlar ({{ filteredComboCases.length }})</div>
+            <div class="case-group-pills">
+              <button
+                v-for="c in filteredComboCases"
+                :key="c"
+                type="button"
+                class="pill combo-pill"
+                :class="{ active: selectedCase === c }"
+                @click="selectCase(c)"
+              >
+                {{ c }}
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="filteredPatternCases.length === 0 && filteredComboCases.length === 0"
+            class="case-empty"
+          >
+            Eşleşen yük durumu yok.
+          </div>
+        </div>
       </div>
 
       <!-- Seçili kombinasyonun açıklaması (ana ekranda) -->
@@ -350,7 +409,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useAnalysisStore } from '~/stores/analysis'
 import { useProjectStore } from '~/stores/project'
@@ -363,6 +422,10 @@ const warningsExpanded = ref(false)
 const configOpen = ref(false)
 const caseDetailOpen = ref(false)
 const exporting = ref(false)
+const caseDropdownOpen = ref(false)
+const caseSearchQuery = ref('')
+const caseSelectorRef = ref<HTMLElement | null>(null)
+const caseSearchInputRef = ref<HTMLInputElement | null>(null)
 
 const currentFile = computed(() => projectStore.currentFile)
 const projectId = computed(() => projectStore.activeProjectId ?? '')
@@ -383,6 +446,28 @@ const reactions = computed(() =>
   currentFile.value ? analysisStore.filteredReactions(currentFile.value.id) : [],
 )
 const modes = computed(() => fileState.value?.modes ?? [])
+
+const isSelectedCombo = computed(() => !!selectedCaseFactors.value)
+
+const comboCaseIds = computed<Set<string>>(() => {
+  const p = fileState.value?.preview
+  if (!p) return new Set()
+  return new Set(p.combinations.map(c => c.id))
+})
+
+const filteredPatternCases = computed(() => {
+  const q = caseSearchQuery.value.trim().toLowerCase()
+  return loadCases.value
+    .filter(c => !comboCaseIds.value.has(c))
+    .filter(c => !q || c.toLowerCase().includes(q))
+})
+
+const filteredComboCases = computed(() => {
+  const q = caseSearchQuery.value.trim().toLowerCase()
+  return loadCases.value
+    .filter(c => comboCaseIds.value.has(c))
+    .filter(c => !q || c.toLowerCase().includes(q))
+})
 
 const selectedCaseFactors = computed<Record<string, number> | null>(() => {
   // Kombinasyon ise preview'dan factor'ları bul
@@ -434,6 +519,38 @@ function openConfig() {
   if (!canRun.value) return
   configOpen.value = true
 }
+
+function selectCase(c: string) {
+  if (!currentFile.value) return
+  analysisStore.setLoadCase(currentFile.value.id, c)
+  caseDropdownOpen.value = false
+  caseSearchQuery.value = ''
+}
+
+// Dropdown açılınca arama kutusuna odaklan
+watch(caseDropdownOpen, async (isOpen) => {
+  if (isOpen) {
+    await nextTick()
+    caseSearchInputRef.value?.focus()
+  }
+})
+
+// Dışarı tıklanınca dropdown'u kapat
+function handleOutsideClick(e: MouseEvent) {
+  if (!caseDropdownOpen.value) return
+  const target = e.target as Node
+  if (caseSelectorRef.value && !caseSelectorRef.value.contains(target)) {
+    caseDropdownOpen.value = false
+    caseSearchQuery.value = ''
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleOutsideClick)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleOutsideClick)
+})
 
 function fmtPct(v: number): string {
   return (v * 100).toFixed(2)
@@ -820,24 +937,180 @@ function cellCls(v: number, max: number): string {
 }
 
 .ap-case-selector {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 1.5rem;
+  gap: 0.5rem;
+  padding: 0.625rem 1.5rem;
   border-top: 1px solid var(--border-default);
-  flex-wrap: wrap;
 }
 
 .selector-label {
   font-size: 0.8125rem;
   color: var(--text-secondary);
   font-weight: 500;
+  flex-shrink: 0;
 }
 
-.selector-pills {
+/* Kapalı dropdown — tek satır trigger */
+.case-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 160px;
+  max-width: 360px;
+  transition: border-color 0.15s;
+}
+
+.case-dropdown-trigger:hover,
+.case-dropdown-trigger.open {
+  border-color: var(--accent-blue);
+}
+
+.trigger-pill {
+  flex: 1;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.trigger-pill.combo {
+  color: var(--accent-purple, #8b5cf6);
+}
+
+.trigger-count {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.125rem 0.375rem;
+  background: var(--bg-primary);
+  border-radius: 999px;
+}
+
+.trigger-chevron {
+  color: var(--text-muted);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Dropdown paneli */
+.case-dropdown-panel {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 1.5rem;
+  right: 1.5rem;
+  max-height: 420px;
   display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-blue);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  padding: 0.75rem;
+  gap: 0.625rem;
+  animation: dropdownFade 0.12s ease-out;
+}
+
+@keyframes dropdownFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.case-dropdown-search {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.625rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.case-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem 0.5rem 2rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+}
+
+.case-search-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.case-group {
+  display: flex;
+  flex-direction: column;
   gap: 0.375rem;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.case-group:not(:last-child) {
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.case-group-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.case-group-pills {
+  display: flex;
   flex-wrap: wrap;
+  gap: 0.25rem;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 0.125rem 0.25rem 0.125rem 0;
+}
+
+.case-group-pills::-webkit-scrollbar { width: 6px; }
+.case-group-pills::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+.combo-pill {
+  border-color: rgba(139, 92, 246, 0.3) !important;
+}
+.combo-pill:hover {
+  border-color: var(--accent-purple, #8b5cf6) !important;
+}
+.combo-pill.active {
+  background: var(--accent-purple, #8b5cf6) !important;
+  border-color: var(--accent-purple, #8b5cf6) !important;
+}
+
+.case-empty {
+  padding: 1.5rem 0.75rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
 }
 
 .pill {
