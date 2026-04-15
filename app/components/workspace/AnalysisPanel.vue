@@ -253,6 +253,14 @@
           <Icon name="lucide:anchor" /> Reaksiyonlar ({{ reactions.length }})
         </button>
         <button
+          type="button"
+          class="tab"
+          :class="{ active: activeTab === 'forces' }"
+          @click="activeTab = 'forces'"
+        >
+          <Icon name="lucide:activity" /> Kesit Tesirleri ({{ elementForces.length }})
+        </button>
+        <button
           v-if="modes.length > 0"
           type="button"
           class="tab"
@@ -338,6 +346,117 @@
               <td>{{ fmt(r.my) }}</td>
               <td>{{ fmt(r.mz) }}</td>
             </tr>
+          </tbody>
+        </table>
+
+        <table v-else-if="activeTab === 'forces'" class="ap-table forces-table">
+          <thead>
+            <tr>
+              <th>Frame</th>
+              <th>I ucu</th>
+              <th>J ucu</th>
+              <th>L (m)</th>
+              <th title="I ucundaki moment (mesnet momenti)">M3<sub>I</sub></th>
+              <th title="Açıklık içi extremum moment">M3<sub>açıklık</sub></th>
+              <th title="J ucundaki moment (mesnet momenti)">M3<sub>J</sub></th>
+              <th title="Maksimum kesme kuvveti">|V2|<sub>max</sub></th>
+              <th title="Axial kuvvet (I ucu)">N<sub>I</sub></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="elementForces.length === 0">
+              <td colspan="9" class="force-empty">
+                <Icon name="lucide:info" />
+                Bu analizde kesit tesiri verisi yok. Yeni bir analiz çalıştırırsan
+                (backend güncel ise) frame elemanları burada listelenir.
+              </td>
+            </tr>
+            <template v-for="ef in elementForces" :key="`${ef.load_case}-${ef.element_id}`">
+              <tr
+                class="force-row"
+                :class="{ expanded: expandedForceEl === ef.element_id }"
+                @click="toggleForceDetail(ef.element_id)"
+              >
+                <td class="muted">
+                  <Icon
+                    :name="expandedForceEl === ef.element_id ? 'lucide:chevron-down' : 'lucide:chevron-right'"
+                    class="expand-chevron"
+                  />
+                  #{{ ef.element_id }}
+                </td>
+                <td class="node-cell">
+                  <span class="node-id">{{ ef.node_i }}</span>
+                  <span v-if="hasAnyLabels(ef.i_labels)" class="node-labels">
+                    <span
+                      v-if="axisLabel(ef.i_labels || {})"
+                      class="node-aks"
+                      :class="{ partial: isPartialAks(ef.i_labels || {}) }"
+                    >{{ axisLabel(ef.i_labels || {}) }}</span>
+                    <span v-if="ef.i_labels?.level" class="node-level">{{ ef.i_labels.level }}</span>
+                  </span>
+                </td>
+                <td class="node-cell">
+                  <span class="node-id">{{ ef.node_j }}</span>
+                  <span v-if="hasAnyLabels(ef.j_labels)" class="node-labels">
+                    <span
+                      v-if="axisLabel(ef.j_labels || {})"
+                      class="node-aks"
+                      :class="{ partial: isPartialAks(ef.j_labels || {}) }"
+                    >{{ axisLabel(ef.j_labels || {}) }}</span>
+                    <span v-if="ef.j_labels?.level" class="node-level">{{ ef.j_labels.level }}</span>
+                  </span>
+                </td>
+                <td class="muted">{{ ef.length.toFixed(2) }}</td>
+                <td :class="momentCls(ef.M3_I, maxForce.M3)">{{ fmt(ef.M3_I) }}</td>
+                <td :class="momentCls(ef.M3_span_ext, maxForce.M3)">
+                  {{ fmt(ef.M3_span_ext) }}
+                  <small v-if="ef.M3_span_ext_x > 0" class="muted">
+                    @{{ ef.M3_span_ext_x.toFixed(2) }}m
+                  </small>
+                </td>
+                <td :class="momentCls(ef.M3_J, maxForce.M3)">{{ fmt(ef.M3_J) }}</td>
+                <td :class="momentCls(ef.V2_max_abs, maxForce.V)">{{ fmt(ef.V2_max_abs) }}</td>
+                <td :class="ef.P_I > 0 ? 'tension' : (ef.P_I < 0 ? 'compression' : '')">
+                  {{ fmt(ef.P_I) }}
+                </td>
+              </tr>
+              <tr v-if="expandedForceEl === ef.element_id" class="force-detail-row">
+                <td colspan="9">
+                  <div class="force-detail">
+                    <div class="fd-label">
+                      Frame #{{ ef.element_id }} • L = {{ ef.length.toFixed(3) }} m •
+                      q<sub>local</sub> = [{{ ef.q_local.map(q => q.toFixed(2)).join(', ') }}]
+                    </div>
+                    <table class="ap-table fd-stations">
+                      <thead>
+                        <tr>
+                          <th>x (m)</th>
+                          <th>x/L</th>
+                          <th>P</th>
+                          <th>V2</th>
+                          <th>V3</th>
+                          <th>T</th>
+                          <th>M2</th>
+                          <th>M3</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(s, i) in ef.stations" :key="i">
+                          <td>{{ s.x.toFixed(3) }}</td>
+                          <td class="muted">{{ (s.x_rel * 100).toFixed(0) }}%</td>
+                          <td>{{ fmt(s.P) }}</td>
+                          <td>{{ fmt(s.V2) }}</td>
+                          <td>{{ fmt(s.V3) }}</td>
+                          <td>{{ fmt(s.T) }}</td>
+                          <td>{{ fmt(s.M2) }}</td>
+                          <td class="M3-cell">{{ fmt(s.M3) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
 
@@ -443,7 +562,7 @@ import { useProjectStore } from '~/stores/project'
 const projectStore = useProjectStore()
 const analysisStore = useAnalysisStore()
 
-const activeTab = ref<'displacements' | 'reactions' | 'modes'>('displacements')
+const activeTab = ref<'displacements' | 'reactions' | 'forces' | 'modes'>('displacements')
 const warningsExpanded = ref(false)
 const configOpen = ref(false)
 const caseDetailOpen = ref(false)
@@ -472,6 +591,10 @@ const reactions = computed(() =>
   currentFile.value ? analysisStore.filteredReactions(currentFile.value.id) : [],
 )
 const modes = computed(() => fileState.value?.modes ?? [])
+const elementForces = computed(() =>
+  currentFile.value ? analysisStore.filteredElementForces(currentFile.value.id) : [],
+)
+const expandedForceEl = ref<number | null>(null)
 
 const isSelectedCombo = computed(() => !!selectedCaseFactors.value)
 
@@ -748,6 +871,35 @@ function cellCls(v: number, max: number): string {
   const ratio = Math.abs(v) / max
   if (ratio > 0.9) return 'heat-high'
   if (ratio > 0.5) return 'heat-mid'
+  return ''
+}
+
+function hasAnyLabels(rec: NodeLabelRec | null | undefined): boolean {
+  return !!(rec && (rec.axis_x || rec.axis_y || rec.level))
+}
+
+function toggleForceDetail(elementId: number) {
+  expandedForceEl.value = expandedForceEl.value === elementId ? null : elementId
+}
+
+const maxForce = computed(() => {
+  let M3 = 0, V = 0, N = 0
+  for (const ef of elementForces.value) {
+    const mA = Math.max(Math.abs(ef.M3_I), Math.abs(ef.M3_J), Math.abs(ef.M3_span_ext))
+    if (mA > M3) M3 = mA
+    if (ef.V2_max_abs > V) V = ef.V2_max_abs
+    const nA = Math.max(Math.abs(ef.P_I), Math.abs(ef.P_J))
+    if (nA > N) N = nA
+  }
+  return { M3, V, N }
+})
+
+function momentCls(v: number, max: number): string {
+  if (!max) return ''
+  const ratio = Math.abs(v) / max
+  if (ratio > 0.8) return 'force-heat-high'
+  if (ratio > 0.5) return 'force-heat-mid'
+  if (ratio > 0.2) return 'force-heat-low'
   return ''
 }
 </script>
@@ -1557,5 +1709,66 @@ function cellCls(v: number, max: number): string {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* -------- Kesit Tesirleri (section forces) -------- */
+.forces-table .force-row {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.forces-table .force-row:hover {
+  background: var(--bg-secondary);
+}
+.forces-table .force-row.expanded {
+  background: var(--bg-secondary);
+}
+.forces-table .expand-chevron {
+  opacity: 0.6;
+  margin-right: 0.25rem;
+}
+.forces-table .tension { color: var(--accent-green); }
+.forces-table .compression { color: #60a5fa; }
+.forces-table td small { margin-left: 0.3rem; opacity: 0.6; }
+.forces-table .force-heat-low { background: rgba(239, 68, 68, 0.07); }
+.forces-table .force-heat-mid {
+  background: rgba(239, 68, 68, 0.20);
+  font-weight: 600;
+}
+.forces-table .force-heat-high {
+  background: rgba(239, 68, 68, 0.45);
+  color: #fff;
+  font-weight: 700;
+}
+.force-detail-row td {
+  padding: 0 !important;
+  background: var(--bg-primary);
+}
+.force-detail {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border-default);
+  border-left: 3px solid var(--accent-blue);
+  background: var(--bg-secondary);
+}
+.fd-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.fd-stations {
+  font-size: 0.75rem;
+  width: 100%;
+}
+.fd-stations .M3-cell { font-weight: 600; }
+.force-empty {
+  text-align: center;
+  padding: 2rem 1rem !important;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+.force-empty :global(.icon) {
+  vertical-align: -3px;
+  margin-right: 0.4rem;
+  opacity: 0.7;
 }
 </style>

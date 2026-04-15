@@ -127,6 +127,39 @@ export interface Reaction extends NodeLabels {
   mz: number
 }
 
+export interface StationForce {
+  x: number
+  x_rel: number
+  P: number
+  V2: number
+  V3: number
+  T: number
+  M2: number
+  M3: number
+}
+
+export interface ElementForces {
+  element_id: number
+  load_case: string
+  length: number
+  node_i: number
+  node_j: number
+  P_I: number; V2_I: number; V3_I: number
+  T_I: number; M2_I: number; M3_I: number
+  P_J: number; V2_J: number; V3_J: number
+  T_J: number; M2_J: number; M3_J: number
+  M3_span_ext: number
+  M3_span_ext_x: number
+  M2_span_ext: number
+  M2_span_ext_x: number
+  V2_max_abs: number
+  V3_max_abs: number
+  q_local: number[]
+  stations: StationForce[]
+  i_labels?: NodeLabels | null
+  j_labels?: NodeLabels | null
+}
+
 // ----------------------------------------------------------- istekler
 function base(projectId: string, fileId: string): string {
   return `/api/projects/${projectId}/files/${fileId}`
@@ -208,6 +241,22 @@ export function getModes(
   analysisId: string,
 ): Promise<Mode[]> {
   return apiGet<Mode[]>(`${base(projectId, fileId)}/analyses/${analysisId}/modes`)
+}
+
+export function getElementForces(
+  projectId: string,
+  fileId: string,
+  analysisId: string,
+  loadCase?: string,
+  elementId?: number,
+): Promise<ElementForces[]> {
+  const params = new URLSearchParams()
+  if (loadCase) params.set('load_case', loadCase)
+  if (elementId !== undefined) params.set('element_id', String(elementId))
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  return apiGet<ElementForces[]>(
+    `${base(projectId, fileId)}/analyses/${analysisId}/forces${qs}`,
+  )
 }
 
 // -------------------------------------------------- Excel export URL'leri

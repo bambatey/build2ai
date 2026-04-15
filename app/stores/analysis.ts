@@ -4,12 +4,14 @@ import {
   type AnalysisListItem,
   type AnalysisOptions,
   type AnalysisStatus,
+  type ElementForces,
   type Mode,
   type ModelPreview,
   type NodeDisplacement,
   type Reaction,
   deleteAnalysis as apiDelete,
   getDisplacements,
+  getElementForces,
   getModes,
   getReactions,
   listAnalyses,
@@ -24,6 +26,7 @@ interface FileAnalyses {
   displacements: NodeDisplacement[]
   reactions: Reaction[]
   modes: Mode[]
+  elementForces: ElementForces[]
   selectedLoadCase: string | null
   preview: ModelPreview | null
 }
@@ -36,6 +39,7 @@ function emptyFileState(): FileAnalyses {
     displacements: [],
     reactions: [],
     modes: [],
+    elementForces: [],
     selectedLoadCase: null,
     preview: null,
   }
@@ -81,6 +85,14 @@ export const useAnalysisStore = defineStore('analysis', {
         return s.reactions.filter(r => r.load_case === s.selectedLoadCase)
       }
     },
+
+    filteredElementForces() {
+      return (fileId: string): ElementForces[] => {
+        const s = this.current(fileId)
+        if (!s.selectedLoadCase) return s.elementForces
+        return s.elementForces.filter(f => f.load_case === s.selectedLoadCase)
+      }
+    },
   },
 
   actions: {
@@ -113,14 +125,18 @@ export const useAnalysisStore = defineStore('analysis', {
 
     async loadResults(projectId: string, fileId: string, analysisId: string) {
       const state = this._ensure(fileId)
-      const [disps, reacts, modes] = await Promise.all([
+      const [disps, reacts, modes, forces] = await Promise.all([
         getDisplacements(projectId, fileId, analysisId),
         getReactions(projectId, fileId, analysisId),
         getModes(projectId, fileId, analysisId).catch(() => [] as Mode[]),
+        getElementForces(projectId, fileId, analysisId).catch(
+          () => [] as ElementForces[],
+        ),
       ])
       state.displacements = disps
       state.reactions = reacts
       state.modes = modes
+      state.elementForces = forces
       if (!state.selectedLoadCase) {
         const cases = [...new Set(disps.map(d => d.load_case))].sort()
         state.selectedLoadCase = cases[0] ?? null
@@ -167,6 +183,7 @@ export const useAnalysisStore = defineStore('analysis', {
           state.status = null
           state.displacements = []
           state.reactions = []
+          state.elementForces = []
         }
       } catch (e) {
         console.error('[Analysis] remove error:', e)
