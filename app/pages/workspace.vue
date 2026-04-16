@@ -151,12 +151,18 @@ const handleSketchExport = (data: { image: string; shapes: any; prompt: string }
   chatStore.sendMessage(`${data.prompt}\n\n[Taslak çizim eklendi - ${Object.values(data.shapes).flat().length} şekil]`)
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (isNewMode.value || projectStore.pendingNewProjectName) {
     chatStore.activeSessionId = null
     chatStore.messages = []
   } else if (projectStore.activeProjectId) {
     chatStore.ensureSessionForProject(projectStore.activeProjectId)
+  } else {
+    // Refresh sonrası: son çalışılan projeyi geri yükle
+    await projectStore.restoreLastProject()
+    if (projectStore.activeProjectId) {
+      chatStore.ensureSessionForProject(projectStore.activeProjectId)
+    }
   }
 })
 </script>

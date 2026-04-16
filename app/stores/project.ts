@@ -282,6 +282,7 @@ export const useProjectStore = defineStore('project', {
 
       this.activeProjectId = id
       this.currentProject = project
+      _persistLastProject(id)
 
       // Backend'den dosyaları her zaman yükle (güncel veri)
       const files = await this.fetchProjectDetail(id)
@@ -306,6 +307,7 @@ export const useProjectStore = defineStore('project', {
       this.currentProject = null
       this.files = []
       this.currentFile = null
+      _persistLastProject(null)
     },
 
     setCurrentProject(project: Project) {
@@ -433,5 +435,25 @@ export const useProjectStore = defineStore('project', {
         await this.fetchProjects()
       }
     },
+
+    async restoreLastProject() {
+      const id = _getLastProject()
+      if (!id) return
+      if (this.activeProjectId === id) return
+      const exists = this.projects.find(p => p.id === id)
+      if (!exists) return
+      await this.openProject(id)
+    },
   },
 })
+
+const _LS_KEY = 'build2ai_last_project'
+function _persistLastProject(id: string | null) {
+  try {
+    if (id) localStorage.setItem(_LS_KEY, id)
+    else localStorage.removeItem(_LS_KEY)
+  } catch {}
+}
+function _getLastProject(): string | null {
+  try { return localStorage.getItem(_LS_KEY) } catch { return null }
+}
