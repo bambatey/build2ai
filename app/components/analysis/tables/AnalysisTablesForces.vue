@@ -126,6 +126,7 @@ const props = defineProps<{ projectId: string; fileId: string }>()
 const analysisStore = useAnalysisStore()
 const fileState = computed(() => analysisStore.current(props.fileId))
 const currentId = computed(() => fileState.value.currentId)
+const selectedCase = computed(() => fileState.value.selectedLoadCase)
 const loading = computed(() => analysisStore.isTableLoading(props.fileId, 'forces'))
 const rows = computed(() => analysisStore.filteredElementForces(props.fileId))
 const expanded = ref<number | null>(null)
@@ -152,11 +153,15 @@ function momentCls(v: number, m: number): string {
 
 async function ensureLoaded() {
   if (currentId.value) {
-    await analysisStore.loadForces(props.projectId, props.fileId, currentId.value)
+    // Case'e göre lazy fetch — tüm case'leri tek seferde çekmek yerine
+    // kullanıcının seçtiği case için endpoint'e ?load_case= geçilir.
+    await analysisStore.loadForces(
+      props.projectId, props.fileId, currentId.value, selectedCase.value,
+    )
   }
 }
 
-watch(currentId, ensureLoaded)
+watch([currentId, selectedCase], ensureLoaded)
 onMounted(ensureLoaded)
 </script>
 

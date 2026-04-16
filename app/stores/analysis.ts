@@ -234,14 +234,25 @@ export const useAnalysisStore = defineStore('analysis', {
       }
     },
 
-    async loadForces(projectId: string, fileId: string, analysisId: string) {
+    /** Kesit tesirleri: case başına fetch — tüm case'leri çekmek 46 MB+
+     * yük ve 90 sn gecikme üretiyor. Cache key ``${analysisId}:${case||_all}``.
+     */
+    async loadForces(
+      projectId: string,
+      fileId: string,
+      analysisId: string,
+      loadCase?: string | null,
+    ) {
       const state = this._ensure(fileId)
-      if (state.loadedFor.forces === analysisId) return
+      const key = `${analysisId}:${loadCase ?? '_all'}`
+      if (state.loadedFor.forces === key) return
       if (state.loading.forces) return
       state.loading.forces = true
       try {
-        state.elementForces = await getElementForces(projectId, fileId, analysisId)
-        state.loadedFor.forces = analysisId
+        state.elementForces = await getElementForces(
+          projectId, fileId, analysisId, loadCase ?? undefined,
+        )
+        state.loadedFor.forces = key
       } catch (e) {
         console.error('[Analysis] loadForces error:', e)
         state.elementForces = []
