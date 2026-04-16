@@ -37,8 +37,6 @@ export const useChatStore = defineStore('chat', {
   state: () => ({
     messages: [] as ChatMessage[],
     isLoading: false,
-    totalMessageCount: 0,
-    totalSessionCount: 0,
     popupAutoOpen: false,   // workspace'te mount olduğunda açılsın mı (yeni proje için)
     // Popup açık/kapalı durumu — bottom-right-bar konumlandırması için
     popupOpen: false,
@@ -207,6 +205,7 @@ export const useChatStore = defineStore('chat', {
       const body = {
         session_id: this.activeSessionId || 'temp',
         project_id: projectStore.activeProjectId || 'temp',
+        file_id: projectStore.currentFile?.id,
         messages: recentMessages,
         model: this.model,
         file_context: fileContext || undefined,
@@ -348,22 +347,8 @@ export const useChatStore = defineStore('chat', {
     },
 
     async hydrate() {
-      // Hafif hydrate: sadece özet istatistikleri çek (tek istek).
-      // Session içerikleri/mesajlar tembel yüklenir (AppSidebar ya da
-      // workspace açıldığında fetchSessions + fetchMessages çağrılır).
-      await this.fetchStats()
-    },
-
-    async fetchStats() {
-      try {
-        const stats = await apiGet<{ session_count: number; message_count: number }>(
-          '/api/chat/stats',
-        )
-        this.totalMessageCount = stats?.message_count ?? 0
-        this.totalSessionCount = stats?.session_count ?? 0
-      } catch (e) {
-        console.error('[Chat] fetchStats error:', e)
-      }
+      // Artık dashboard'da stat gösterilmiyor; session'lar ve mesajlar
+      // tembel yüklenir (workspace açılınca fetchSessions + fetchMessages).
     },
 
     // ---! Backend'den oturumları yükle ve isimleri düzelt

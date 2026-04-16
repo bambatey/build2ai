@@ -13,7 +13,7 @@
           ref="promptRef"
           v-model="promptText"
           class="prompt-input"
-          placeholder="Yapmak istediğin modeli anlat… (örn: 5 katlı RC çerçeve, 4x3 açıklık, TBDY 2018)"
+          placeholder="Yapmak istediğin modeli anlat…"
           rows="1"
           @keydown="onKey"
         />
@@ -176,7 +176,6 @@ const programs = mockSupportedPrograms
 
 onMounted(async () => {
   await projectStore.hydrate()
-  // chatStore.hydrate() tek istek (stats) — başka yerden zaten tetiklendi
 })
 
 function handleOpenProject(id: string) {

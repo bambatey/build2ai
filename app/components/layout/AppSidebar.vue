@@ -102,12 +102,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProjectStore } from '~/stores/project'
-import { useChatStore } from '~/stores/chat'
 
 const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
-const chatStore = useChatStore()
 const { user: authUser, signOut } = useAuth()
 const isCollapsed = ref(false)
 
@@ -148,7 +146,6 @@ const handleOpenRecent = (id: string) => {
 
 onMounted(() => {
   projectStore.hydrate()
-  chatStore.hydrate()
 })
 </script>
 
