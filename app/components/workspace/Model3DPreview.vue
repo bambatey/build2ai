@@ -4,10 +4,6 @@
       <Icon name="lucide:loader-2" class="spin" />
       Model yükleniyor...
     </div>
-    <div v-else-if="error" class="m3d-status error">
-      <Icon name="lucide:alert-triangle" />
-      {{ error }}
-    </div>
 
     <div ref="mountEl" class="m3d-canvas" />
 

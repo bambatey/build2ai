@@ -1,167 +1,110 @@
 <template>
-  <div class="dashboard-page">
-    <!-- Welcome Section -->
-
-      <div class="welcome-content">
-        <h1 class="welcome-title">Hoş geldin</h1>
-        <p class="welcome-subtitle">Yapısal modellerinizi AI ile dönüştürün</p>
-    </div>
-
-    <!-- Stats Grid -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-label">Toplam Proje</span>
-          <div class="stat-icon">
-            <Icon name="lucide:folder" />
-          </div>
-        </div>
-        <div class="stat-value">{{ stats.totalProjects }}</div>
-        <div class="stat-footer">
-          <span class="stat-period">kayıtlı proje</span>
-        </div>
+  <div class="dashboard">
+    <!-- Hero: greeting + AI prompt input -->
+    <section class="hero">
+      <div class="hero-greeting">
+        <h1 class="hero-title">Hoş geldin, {{ firstName }}</h1>
+        <p class="hero-subtitle">Yapısal modelini AI ile oluştur, analiz et, düzenle.</p>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-label">Sohbet Oturumu</span>
-          <div class="stat-icon">
-            <Icon name="lucide:message-square" />
-          </div>
-        </div>
-        <div class="stat-value">{{ stats.activeSessions }}</div>
-        <div class="stat-footer">
-          <span class="stat-period">toplam oturum</span>
-        </div>
+      <form class="hero-prompt" @submit.prevent="submitPrompt">
+        <Icon name="lucide:sparkles" class="prompt-icon" />
+        <textarea
+          ref="promptRef"
+          v-model="promptText"
+          class="prompt-input"
+          placeholder="Yapmak istediğin modeli anlat… (örn: 5 katlı RC çerçeve, 4x3 açıklık, TBDY 2018)"
+          rows="1"
+          @keydown="onKey"
+        />
+        <button
+          type="submit"
+          class="prompt-submit"
+          :disabled="!promptText.trim()"
+          title="Yeni proje oluştur"
+        >
+          <Icon name="lucide:arrow-up" />
+        </button>
+      </form>
+
+      <div class="hero-actions">
+        <button type="button" class="mini-btn" @click="openUpload">
+          <Icon name="lucide:upload" />
+          Dosya Yükle
+        </button>
+        <button type="button" class="mini-btn" @click="showTemplateWizard = true">
+          <Icon name="lucide:layout-template" />
+          Şablon
+        </button>
+        <span class="agent-pill" :class="agentStore.status">
+          <span class="dot" />
+          Agent: {{ agentStore.statusText }}
+        </span>
       </div>
+    </section>
 
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-label">AI Mesaj</span>
-          <div class="stat-icon">
-            <Icon name="lucide:sparkles" />
-          </div>
-        </div>
-        <div class="stat-value">{{ stats.aiOperations }}</div>
-        <div class="stat-footer">
-          <span class="stat-period">toplam mesaj</span>
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-label">Agent Durumu</span>
-          <div class="stat-icon">
-            <Icon name="lucide:zap" />
-          </div>
-        </div>
-        <div class="stat-value agent-status">
-          <span class="status-indicator" :class="agentStore.status" />
-          <span>{{ agentStore.statusText }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main Content Grid -->
-    <div class="content-grid">
-      <!-- Recent Projects -->
-      <div class="section-card">
-        <div class="section-header">
-          <h2 class="section-title">Son Projeler</h2>
-          <NuxtLink to="/projects" class="section-link">
-            Tümünü Gör
-            <Icon name="lucide:arrow-right" />
-          </NuxtLink>
-        </div>
-
-        <div class="projects-list">
-          <button
-            v-for="project in recentProjects"
-            :key="project.id"
-            type="button"
-            @click="handleOpenProject(project.id)"
-            class="project-item"
-          >
-            <div class="project-icon">
-              <Icon name="lucide:folder" />
-            </div>
-            <div class="project-info">
-              <div class="project-name">{{ project.name }}</div>
-              <div class="project-meta">
-                <span class="format-badge">{{ project.format }}</span>
-                <span class="separator">·</span>
-                <span>{{ formatTimeAgo(project.lastModified) }}</span>
-              </div>
-            </div>
-            <div class="project-action">
-              <Icon name="lucide:chevron-right" />
-            </div>
-          </button>
-
-          <div v-if="recentProjects.length === 0" class="empty-state">
-            <Icon name="lucide:inbox" />
-            <span>Henüz proje yok</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="section-card">
-        <div class="section-header">
-          <h2 class="section-title">Hızlı Başlat</h2>
-        </div>
-
-        <div class="actions-list">
-          <button type="button" @click="openUpload" class="action-item">
-            <div class="action-icon">
-              <Icon name="lucide:upload" />
-            </div>
-            <div class="action-content">
-              <div class="action-title">Dosya Yükle</div>
-              <div class="action-desc">SAP2000, ETABS veya diğer formatlar</div>
-            </div>
-          </button>
-
-          <button type="button" @click="startNewProject" class="action-item">
-            <div class="action-icon">
-              <Icon name="lucide:plus-circle" />
-            </div>
-            <div class="action-content">
-              <div class="action-title">Yeni Proje</div>
-              <div class="action-desc">AI asistan ile yeni proje başlat</div>
-            </div>
-          </button>
-
-          <button type="button" @click="showTemplateWizard = true" class="action-item">
-            <div class="action-icon">
-              <Icon name="lucide:layout-template" />
-            </div>
-            <div class="action-content">
-              <div class="action-title">Şablon Seç</div>
-              <div class="action-desc">Hazır model şablonları</div>
-            </div>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Supported Programs -->
-    <div class="section-card">
+    <!-- Recent projects: visual cards -->
+    <section v-if="recentProjects.length > 0" class="section">
       <div class="section-header">
-        <h2 class="section-title">Desteklenen Formatlar</h2>
+        <h2 class="section-title">
+          <Icon name="lucide:clock" />
+          Kaldığın yerden devam et
+        </h2>
+        <NuxtLink to="/projects" class="section-link">
+          Tümünü Gör <Icon name="lucide:arrow-right" />
+        </NuxtLink>
       </div>
 
-      <div class="programs-grid">
-        <div v-for="program in programs" :key="program.id" class="program-card" :class="{ disabled: program.status === 'coming-soon' }">
-          <div class="program-header">
-            <div class="program-name">{{ program.name }}</div>
-            <span v-if="program.status === 'coming-soon'" class="program-badge">Yakında</span>
-            <span v-else class="program-badge active">Aktif</span>
+      <div class="project-grid">
+        <button
+          v-for="project in recentProjects"
+          :key="project.id"
+          type="button"
+          class="project-card"
+          @click="handleOpenProject(project.id)"
+        >
+          <div class="card-thumb">
+            <DashboardProjectThumbnail :project-id="project.id" />
+            <span class="card-format">{{ project.format || 'model' }}</span>
           </div>
-          <div class="program-format">{{ program.format }}</div>
+          <div class="card-body">
+            <div class="card-name">{{ project.name }}</div>
+            <div class="card-meta">{{ formatTimeAgo(project.lastModified) }}</div>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <!-- Empty state (no projects) -->
+    <section v-else class="section">
+      <div class="empty-block">
+        <Icon name="lucide:inbox" class="empty-icon" />
+        <h3>Henüz proje yok</h3>
+        <p>Yukarıdan bir prompt yaz, dosya yükle ya da şablon seç.</p>
+      </div>
+    </section>
+
+    <!-- Supported formats (compact) -->
+    <section class="section compact">
+      <div class="section-header">
+        <h2 class="section-title">
+          <Icon name="lucide:circle-check" />
+          Desteklenen formatlar
+        </h2>
+      </div>
+      <div class="format-row">
+        <div
+          v-for="program in programs"
+          :key="program.id"
+          class="format-chip"
+          :class="{ disabled: program.status === 'coming-soon' }"
+          :title="program.status === 'coming-soon' ? 'Yakında' : 'Aktif'"
+        >
+          <span class="chip-name">{{ program.name }}</span>
+          <span class="chip-format">{{ program.format }}</span>
         </div>
       </div>
-    </div>
+    </section>
 
     <!-- Template Wizard -->
     <DashboardTemplateWizardModal v-model="showTemplateWizard" />
@@ -191,6 +134,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { getAuth } from 'firebase/auth'
+
 import { mockSupportedPrograms, formatTimeAgo } from '~/utils/mockData'
 import { useAgentStore } from '~/stores/agent'
 import { useProjectStore } from '~/stores/project'
@@ -198,9 +143,7 @@ import { useChatStore } from '~/stores/chat'
 import { useAgent } from '~/composables/useAgent'
 import { createProjectFromUpload } from '~/utils/projectFromUpload'
 
-definePageMeta({
-  layout: 'default',
-})
+definePageMeta({ layout: 'default' })
 
 useSeoMeta({
   title: 'Dashboard - Build2AI',
@@ -213,48 +156,63 @@ const projectStore = useProjectStore()
 const chatStore = useChatStore()
 const agent = useAgent()
 
-const stats = computed(() => ({
-  totalProjects: projectStore.projects.length,
-  activeSessions: chatStore.sessions.length,
-  aiOperations: chatStore.totalMessageCount,
-}))
-
-const recentProjects = computed(() => projectStore.recentProjects.slice(0, 5))
-const programs = mockSupportedPrograms
-
-onMounted(async () => {
-  await projectStore.hydrate()
-  await chatStore.hydrate()
-})
-
-const handleOpenProject = (id: string) => {
-  projectStore.openProject(id)
-  router.push('/workspace')
-}
-
+const promptText = ref('')
+const promptRef = ref<HTMLTextAreaElement | null>(null)
 const showUpload = ref(false)
 const showTemplateWizard = ref(false)
 const uploadError = ref('')
 
-const openUpload = () => {
+const firstName = computed(() => {
+  const u = getAuth().currentUser
+  const d = u?.displayName
+  if (d) return d.split(' ')[0]
+  const email = u?.email
+  if (email) return email.split('@')[0]
+  return 'mühendis'
+})
+
+const recentProjects = computed(() => projectStore.recentProjects.slice(0, 10))
+const programs = mockSupportedPrograms
+
+onMounted(async () => {
+  await projectStore.hydrate()
+  // chatStore.hydrate() tek istek (stats) — başka yerden zaten tetiklendi
+})
+
+function handleOpenProject(id: string) {
+  projectStore.openProject(id)
+  router.push('/workspace')
+}
+
+async function submitPrompt() {
+  const txt = promptText.value.trim()
+  if (!txt) return
+  await projectStore.startNewProjectWithPrompt(txt)
+  chatStore.activeSessionId = null
+  chatStore.messages = []
+  promptText.value = ''
+  router.push('/workspace?mode=new')
+}
+
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    submitPrompt()
+  }
+}
+
+function openUpload() {
   uploadError.value = ''
   showUpload.value = true
 }
-
-const closeUpload = () => {
+function closeUpload() {
   showUpload.value = false
   uploadError.value = ''
 }
-
-const startNewProject = () => {
-  projectStore.requestNewProject()
-}
-
-const handleUploadError = (msg: string) => {
+function handleUploadError(msg: string) {
   uploadError.value = msg
 }
-
-const handleFileSelected = async (file: File) => {
+async function handleFileSelected(file: File) {
   try {
     await createProjectFromUpload(file, { projectStore, agent, router })
     closeUpload()
@@ -265,393 +223,281 @@ const handleFileSelected = async (file: File) => {
 </script>
 
 <style scoped>
-.dashboard-page {
-  padding: 1rem 2rem 2rem 2rem;
-  max-width: 1600px;
+.dashboard {
+  padding: 2rem 2rem 3rem;
+  max-width: 1200px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
 }
 
-/* Welcome Section */
-.welcome-content {
-  margin-bottom: 1.5rem;
-  padding-top: 0;
+/* -------- Hero -------- */
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
-.welcome-title {
-  font-size: 2rem;
+.hero-greeting { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.hero-title {
+  font-size: 1.75rem;
   font-weight: 600;
-  color: var(--text-primary);
-  margin-top: 0;
-  margin-bottom: 0.5rem;
   letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0;
 }
 
-.welcome-subtitle {
-  font-size: 1rem;
+.hero-subtitle {
+  font-size: 0.9375rem;
   color: var(--text-secondary);
+  margin: 0;
 }
 
-/* Stats Grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-  margin-top: 0;
-}
-
-.stat-card {
+.hero-prompt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem 0.625rem 1rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 1.5rem;
-  transition: all 0.2s;
+  border-radius: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.hero-prompt:focus-within {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
-.stat-card:hover {
-  border-color: var(--border-active);
-  transform: translateY(-2px);
-}
-
-.stat-header {
+.prompt-icon {
+  color: var(--accent-purple, #8b5cf6);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
 }
+.prompt-icon :deep(svg) { width: 20px; height: 20px; }
 
-.stat-label {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.stat-icon {
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.stat-value {
-  font-size: 2rem;
-  font-weight: 600;
+.prompt-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
   color: var(--text-primary);
-  margin-bottom: 0.75rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  line-height: 1.4;
+  padding: 0;
+  height: 24px;
+  max-height: 120px;
+  overflow-y: auto;
 }
-
-.stat-value.agent-status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-}
-
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent-green);
-}
-
-.status-indicator.connecting {
-  background: var(--accent-amber);
-}
-
-.status-indicator.disconnected {
-  background: var(--accent-red);
-}
-
-.stat-footer {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
+.prompt-input::placeholder {
   color: var(--text-muted);
 }
 
-.stat-trend {
+.prompt-submit {
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  font-weight: 500;
+  justify-content: center;
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.1s, opacity 0.15s;
+}
+.prompt-submit:hover:not(:disabled) { transform: translateY(-1px); }
+.prompt-submit:disabled { opacity: 0.3; cursor: not-allowed; }
+.prompt-submit :deep(svg) { width: 18px; height: 18px; }
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.stat-trend.positive {
-  color: var(--accent-green);
-}
-
-/* Content Grid */
-.content-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2.5rem;
-}
-
-/* Section Card */
-.section-card {
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 1.5rem;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.15s;
 }
+.mini-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+.mini-btn :deep(svg) { width: 15px; height: 15px; }
+
+.agent-pill {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.agent-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-green);
+}
+.agent-pill.connecting .dot { background: var(--accent-amber, #f59e0b); }
+.agent-pill.disconnected .dot { background: var(--accent-red, #ef4444); }
+
+/* -------- Sections -------- */
+.section { display: flex; flex-direction: column; gap: 1rem; }
+.section.compact { gap: 0.5rem; }
 
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
 }
-
 .section-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.section-link {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.section-title :deep(svg) {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
   color: var(--accent-blue);
   text-decoration: none;
-  transition: color 0.2s;
+}
+.section-link:hover { color: var(--text-primary); }
+.section-link :deep(svg) { width: 14px; height: 14px; }
+
+/* -------- Project cards -------- */
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.875rem;
 }
 
-.section-link:hover {
-  color: var(--text-primary);
-}
-
-/* Projects List */
-.projects-list {
+.project-card {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-}
-
-.project-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  text-decoration: none;
-  transition: all 0.2s;
-  background: transparent;
+  padding: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
   color: inherit;
-  font: inherit;
-  text-align: left;
-  width: 100%;
   cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.project-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-blue);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
-.project-item:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--border-default);
+.card-thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-bottom: 1px solid var(--border-default);
+  overflow: hidden;
 }
 
-.project-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  flex-shrink: 0;
+.card-format {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.7rem;
+  color: #fff;
 }
 
-.project-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.project-name {
-  font-size: 0.9375rem;
+.card-body { padding: 0.75rem 0.875rem; }
+.card-name {
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 2px;
 }
+.card-meta { font-size: 0.75rem; color: var(--text-muted); }
 
-.project-meta {
+/* -------- Empty block -------- */
+.empty-block {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-default);
+  border-radius: 10px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
 }
+.empty-icon { color: var(--text-muted); }
+.empty-icon :deep(svg) { width: 36px; height: 36px; }
+.empty-block h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary); }
+.empty-block p { margin: 0; font-size: 0.875rem; }
 
-.format-badge {
-  padding: 0.125rem 0.5rem;
-  background: var(--bg-elevated);
-  border-radius: 4px;
-  font-family: 'JetBrains Mono', monospace;
+/* -------- Format chips -------- */
+.format-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.format-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
   font-size: 0.75rem;
 }
-
-.separator {
+.format-chip.disabled { opacity: 0.45; }
+.chip-name { color: var(--text-primary); font-weight: 500; }
+.chip-format {
+  font-family: ui-monospace, SFMono-Regular, monospace;
   color: var(--text-muted);
 }
 
-.project-action {
-  color: var(--text-muted);
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.project-item:hover .project-action {
-  opacity: 1;
-}
-
-/* Actions List */
-.actions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.action-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid var(--border-default);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.2s;
-  width: 100%;
-}
-
-.action-item:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-blue);
-}
-
-.action-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: var(--bg-tertiary);
-  color: var(--accent-blue);
-  flex-shrink: 0;
-}
-
-.action-content {
-  flex: 1;
-}
-
-.action-title {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin-bottom: 0.25rem;
-}
-
-.action-desc {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-}
-
-/* Programs Grid */
-.programs-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.program-card {
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid var(--border-default);
-  transition: all 0.2s;
-}
-
-.program-card:hover:not(.disabled) {
-  border-color: var(--accent-blue);
-  background: var(--bg-tertiary);
-}
-
-.program-card.disabled {
-  opacity: 0.5;
-}
-
-.program-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.program-name {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.program-badge {
-  font-size: 0.6875rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-}
-
-.program-badge.active {
-  background: rgba(0, 255, 136, 0.1);
-  color: var(--accent-green);
-}
-
-.program-format {
-  font-size: 0.8125rem;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--text-secondary);
-}
-
-/* Empty State */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  gap: 0.5rem;
-  color: var(--text-muted);
-  font-size: 0.875rem;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .dashboard-page {
-    padding: 1rem;
-  }
-
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .programs-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  }
-}
-
-/* Upload Modal */
+/* -------- Upload modal (mevcutla uyumlu) -------- */
 .upload-modal-overlay {
   position: fixed;
   inset: 0;
@@ -662,7 +508,6 @@ const handleFileSelected = async (file: File) => {
   z-index: 200;
   padding: 1rem;
 }
-
 .upload-modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -672,7 +517,6 @@ const handleFileSelected = async (file: File) => {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
-
 .upload-modal-header {
   display: flex;
   align-items: center;
@@ -680,14 +524,12 @@ const handleFileSelected = async (file: File) => {
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border-default);
 }
-
 .upload-modal-title {
   font-size: 1.0625rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
-
 .upload-close {
   background: transparent;
   border: none;
@@ -700,16 +542,11 @@ const handleFileSelected = async (file: File) => {
   justify-content: center;
   border-radius: 6px;
 }
-
 .upload-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
-
-.upload-modal-body {
-  padding: 1.25rem;
-}
-
+.upload-modal-body { padding: 1.25rem; }
 .upload-error {
   margin-top: 0.75rem;
   padding: 0.625rem 0.875rem;
@@ -718,5 +555,12 @@ const handleFileSelected = async (file: File) => {
   border-radius: 6px;
   color: var(--accent-red);
   font-size: 0.8125rem;
+}
+
+@media (max-width: 640px) {
+  .dashboard { padding: 1rem; gap: 2rem; }
+  .hero-title { font-size: 1.5rem; }
+  .project-grid { grid-template-columns: repeat(2, 1fr); }
+  .agent-pill { margin-left: 0; }
 }
 </style>

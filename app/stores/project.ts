@@ -70,6 +70,7 @@ export const useProjectStore = defineStore('project', {
     changes: [] as Change[],
     isNewProjectModalOpen: false,
     pendingNewProjectName: null as string | null,
+    pendingInitialMessage: null as string | null,
     _loaded: false,
   }),
 
@@ -307,6 +308,7 @@ export const useProjectStore = defineStore('project', {
       this.currentProject = null
       this.files = []
       this.currentFile = null
+      this.pendingInitialMessage = null
       _persistLastProject(null)
     },
 
@@ -380,6 +382,30 @@ export const useProjectStore = defineStore('project', {
       this.currentProject = null
       this.files = []
       this.currentFile = null
+    },
+
+    /** Dashboard hero prompt'tan tek-tıkla yeni proje:
+     *  - Proje adı her zaman "Yeni Proje" (workspace'ten yeniden adlandırılır)
+     *  - Prompt workspace mount'ta ilk chat mesajı olarak gönderilir
+     */
+    async renameProject(projectId: string, name: string) {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      try {
+        await apiPut(`/api/projects/${projectId}`, { name: trimmed })
+        const proj = this.projects.find(p => p.id === projectId)
+        if (proj) proj.name = trimmed
+        if (this.currentProject?.id === projectId) this.currentProject.name = trimmed
+      } catch (e) {
+        console.error('[Project] renameProject error:', e)
+      }
+    },
+
+    async startNewProjectWithPrompt(prompt: string) {
+      const trimmed = prompt.trim()
+      if (!trimmed) return
+      this.pendingInitialMessage = trimmed
+      await this.startNewProjectDraft('Yeni Proje')
     },
 
     async commitPendingProject(opts?: { storedAt?: string }): Promise<Project | null> {

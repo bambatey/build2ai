@@ -137,6 +137,11 @@ function onWindowResize() {
 
 onMounted(() => {
   placeBottomRight()
+  // Store'dan auto-open sinyali varsa popup'ı aç (yeni proje akışı)
+  if (chatStore.popupAutoOpen) {
+    chatStore.popupAutoOpen = false
+    openPopup()
+  }
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
   window.addEventListener('resize', onWindowResize)

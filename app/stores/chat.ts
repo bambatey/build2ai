@@ -38,6 +38,8 @@ export const useChatStore = defineStore('chat', {
     messages: [] as ChatMessage[],
     isLoading: false,
     totalMessageCount: 0,
+    totalSessionCount: 0,
+    popupAutoOpen: false,   // workspace'te mount olduğunda açılsın mı (yeni proje için)
     model: '' as string,  // Boş = backend'in default modeli kullanılır
     quickCommands: [
       {
@@ -343,32 +345,22 @@ export const useChatStore = defineStore('chat', {
     },
 
     async hydrate() {
-      // Tüm projelerin session'larını yükle
-      const projectStore = useProjectStore()
-      let totalMsgs = 0
-      for (const project of projectStore.projects) {
-        await this.fetchSessions(project.id)
+      // Hafif hydrate: sadece özet istatistikleri çek (tek istek).
+      // Session içerikleri/mesajlar tembel yüklenir (AppSidebar ya da
+      // workspace açıldığında fetchSessions + fetchMessages çağrılır).
+      await this.fetchStats()
+    },
+
+    async fetchStats() {
+      try {
+        const stats = await apiGet<{ session_count: number; message_count: number }>(
+          '/api/chat/stats',
+        )
+        this.totalMessageCount = stats?.message_count ?? 0
+        this.totalSessionCount = stats?.session_count ?? 0
+      } catch (e) {
+        console.error('[Chat] fetchStats error:', e)
       }
-      // Her session'ın mesaj sayısını çek
-      for (const session of this.sessions) {
-        try {
-          const messages = await apiGet<any[]>(`/api/chat/sessions/${session.id}/messages?project_id=${session.projectId}`)
-          const count = (messages || []).length
-          totalMsgs += count
-          session.messages = (messages || []).map((m: any) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            timestamp: new Date(m.created_at),
-            diff: m.diff ? m.diff.map((d: any) => ({
-              lineNumber: d.line_number ?? d.lineNumber,
-              oldValue: d.old_value ?? d.oldValue,
-              newValue: d.new_value ?? d.newValue,
-            })) : undefined,
-          }))
-        } catch {}
-      }
-      this.totalMessageCount = totalMsgs
     },
 
     // ---! Backend'den oturumları yükle ve isimleri düzelt

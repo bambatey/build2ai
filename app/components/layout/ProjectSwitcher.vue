@@ -1,24 +1,46 @@
 <template>
   <div class="project-switcher" :class="{ collapsed }">
-    <button
-      type="button"
-      class="switcher-trigger"
-      :class="{ open: isOpen }"
-      @click="toggleOpen"
-    >
-      <div class="trigger-icon">
-        <Icon name="lucide:folder" />
-      </div>
-      <div v-if="!collapsed" class="trigger-info">
-        <div class="trigger-label">PROJE</div>
-        <div class="trigger-name">{{ triggerName }}</div>
-      </div>
-      <Icon
-        v-if="!collapsed"
-        name="lucide:chevrons-up-down"
-        class="trigger-chevron"
-      />
-    </button>
+    <div class="switcher-row" :class="{ open: isOpen }">
+      <button
+        type="button"
+        class="switcher-trigger"
+        :class="{ open: isOpen }"
+        @click="toggleOpen"
+      >
+        <div class="trigger-icon">
+          <Icon name="lucide:folder" />
+        </div>
+        <div v-if="!collapsed" class="trigger-info">
+          <div class="trigger-label">PROJE</div>
+          <div v-if="!renaming" class="trigger-name">{{ triggerName }}</div>
+          <input
+            v-else
+            ref="renameInputRef"
+            v-model="renameValue"
+            class="trigger-rename-input"
+            :placeholder="triggerName"
+            @click.stop
+            @keydown.enter="commitRename"
+            @keydown.esc="cancelRename"
+            @blur="commitRename"
+          />
+        </div>
+        <Icon
+          v-if="!collapsed && !renaming"
+          name="lucide:chevrons-up-down"
+          class="trigger-chevron"
+        />
+      </button>
+      <button
+        v-if="!collapsed && !renaming"
+        type="button"
+        class="trigger-action rename-btn"
+        title="Yeniden adlandır"
+        @click.stop="startRename"
+      >
+        <Icon name="lucide:pencil" />
+      </button>
+    </div>
 
     <!-- Popover -->
     <Teleport to="body">
@@ -41,25 +63,37 @@
         </div>
 
         <div class="popover-list">
-          <button
+          <div
             v-for="project in filteredProjects"
             :key="project.id"
-            type="button"
-            class="popover-item"
+            class="popover-row"
             :class="{ active: project.id === projectStore.activeProjectId }"
-            @click="selectProject(project.id)"
           >
-            <Icon name="lucide:folder" class="item-icon" />
-            <div class="item-info">
-              <div class="item-name">{{ project.name }}</div>
-              <div class="item-meta">{{ project.format }} · {{ project.fileCount }} dosya</div>
-            </div>
-            <Icon
-              v-if="project.id === projectStore.activeProjectId"
-              name="lucide:check"
-              class="item-check"
-            />
-          </button>
+            <button
+              type="button"
+              class="popover-item"
+              @click="selectProject(project.id)"
+            >
+              <Icon name="lucide:folder" class="item-icon" />
+              <div class="item-info">
+                <div class="item-name">{{ project.name }}</div>
+                <div class="item-meta">{{ project.format }} · {{ project.fileCount }} dosya</div>
+              </div>
+              <Icon
+                v-if="project.id === projectStore.activeProjectId"
+                name="lucide:check"
+                class="item-check"
+              />
+            </button>
+            <button
+              type="button"
+              class="popover-delete"
+              title="Projeyi sil"
+              @click="handleDelete(project.id, project.name, $event)"
+            >
+              <Icon name="lucide:trash-2" />
+            </button>
+          </div>
 
           <div v-if="filteredProjects.length === 0" class="popover-empty">
             Sonuç bulunamadı
@@ -101,6 +135,49 @@ const search = ref('')
 const searchInput = ref<HTMLInputElement | null>(null)
 const popoverEl = ref<HTMLElement | null>(null)
 const popoverStyle = ref<Record<string, string>>({})
+
+// --- Inline rename
+const renaming = ref(false)
+const renameValue = ref('')
+const renameInputRef = ref<HTMLInputElement | null>(null)
+
+async function startRename() {
+  const current = activeProject.value?.name ?? projectStore.pendingNewProjectName
+  if (!current) return
+  renameValue.value = current
+  renaming.value = true
+  await nextTick()
+  renameInputRef.value?.focus()
+  renameInputRef.value?.select()
+}
+
+async function commitRename() {
+  if (!renaming.value) return
+  const newName = renameValue.value.trim()
+  const current = activeProject.value?.name ?? projectStore.pendingNewProjectName
+  renaming.value = false
+  if (!newName || newName === current) return
+  if (activeProject.value) {
+    await projectStore.renameProject(activeProject.value.id, newName)
+  } else if (projectStore.pendingNewProjectName !== null) {
+    projectStore.pendingNewProjectName = newName
+  }
+}
+
+function cancelRename() {
+  renaming.value = false
+}
+
+async function handleDelete(projectId: string, projectName: string, e: MouseEvent) {
+  e.stopPropagation()
+  if (!confirm(`"${projectName}" projesi kalıcı olarak silinecek. Emin misin?`)) return
+  await projectStore.deleteProject(projectId)
+  close()
+  // Aktif projeyi sildiysek, projeler sayfasına at
+  if (!projectStore.activeProjectId) {
+    router.push('/projects')
+  }
+}
 
 const activeProject = computed(() => projectStore.activeProject)
 
@@ -193,8 +270,17 @@ onBeforeUnmount(cleanup)
   border-bottom: 1px solid var(--border-default);
 }
 
+.switcher-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.switcher-row:hover .trigger-action { opacity: 1; }
+
 .switcher-trigger {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -206,6 +292,43 @@ onBeforeUnmount(cleanup)
   transition: all 0.2s;
   text-align: left;
   color: var(--text-primary);
+}
+
+.trigger-action {
+  width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.trigger-action:hover {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+  opacity: 1;
+}
+.trigger-action :deep(svg) { width: 14px; height: 14px; }
+
+.trigger-rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-elevated);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
+  margin: 0;
+  min-width: 0;
 }
 
 .switcher-trigger:hover,
@@ -314,8 +437,22 @@ onBeforeUnmount(cleanup)
   padding: 0.5rem 0.75rem;
 }
 
+.popover-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-radius: 6px;
+}
+.popover-row:hover .popover-delete { opacity: 1; }
+.popover-row.active .popover-item {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+}
+
 .popover-item {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.625rem;
@@ -334,10 +471,26 @@ onBeforeUnmount(cleanup)
   color: var(--text-primary);
 }
 
-.popover-item.active {
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--accent-blue);
+.popover-delete {
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
 }
+.popover-delete:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  opacity: 1;
+}
+.popover-delete :deep(svg) { width: 14px; height: 14px; }
 
 .item-icon {
   width: 18px;

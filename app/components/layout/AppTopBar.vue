@@ -2,8 +2,35 @@
   <header class="top-bar">
     <!-- Page Info -->
     <div class="page-info">
-      <h1 class="page-title">{{ pageTitle }}</h1>
-      <span v-if="subtitle" class="page-subtitle">{{ subtitle }}</span>
+      <template v-if="isWorkspace && workspaceProjectName">
+        <input
+          v-if="renaming"
+          ref="renameInputRef"
+          v-model="renameValue"
+          class="page-title rename-input"
+          :placeholder="workspaceProjectName"
+          @keydown.enter="commitRename"
+          @keydown.esc="cancelRename"
+          @blur="commitRename"
+        />
+        <button
+          v-else
+          type="button"
+          class="page-title editable"
+          title="Yeniden adlandırmak için tıkla"
+          @click="startRename"
+        >
+          {{ workspaceProjectName }}
+          <Icon name="lucide:pencil" class="rename-icon" />
+        </button>
+        <span v-if="projectStore.currentFile" class="page-subtitle">
+          {{ projectStore.currentFile.name }}
+        </span>
+      </template>
+      <template v-else>
+        <h1 class="page-title">{{ pageTitle }}</h1>
+        <span v-if="subtitle" class="page-subtitle">{{ subtitle }}</span>
+      </template>
     </div>
 
     <!-- Actions -->
@@ -35,12 +62,56 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChatStore } from '~/stores/chat'
+import { useProjectStore } from '~/stores/project'
 
 const route = useRoute()
 const chatStore = useChatStore()
+const projectStore = useProjectStore()
+
+const isWorkspace = computed(() => route.path === '/workspace')
+
+// Workspace'te gösterilecek ad: aktif proje varsa onun adı; yoksa pending draft
+const workspaceProjectName = computed<string | null>(() => {
+  return projectStore.activeProject?.name
+    ?? projectStore.pendingNewProjectName
+    ?? null
+})
+
+// --- Inline rename
+const renaming = ref(false)
+const renameValue = ref('')
+const renameInputRef = ref<HTMLInputElement | null>(null)
+
+async function startRename() {
+  const current = workspaceProjectName.value
+  if (!current) return
+  renameValue.value = current
+  renaming.value = true
+  await nextTick()
+  renameInputRef.value?.focus()
+  renameInputRef.value?.select()
+}
+
+async function commitRename() {
+  if (!renaming.value) return
+  const newName = renameValue.value.trim()
+  const current = workspaceProjectName.value
+  renaming.value = false
+  if (!newName || newName === current) return
+  // Aktif proje varsa backend'e yaz; yoksa pending draft adını güncelle
+  if (projectStore.activeProject) {
+    await projectStore.renameProject(projectStore.activeProject.id, newName)
+  } else if (projectStore.pendingNewProjectName !== null) {
+    projectStore.pendingNewProjectName = newName
+  }
+}
+
+function cancelRename() {
+  renaming.value = false
+}
 
 const selectedModel = computed({
   get: () => chatStore.model,
@@ -117,6 +188,47 @@ const actions = computed(() => {
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.01em;
+}
+
+.page-title.editable {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+}
+.page-title.editable:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+}
+.page-title.editable .rename-icon {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.page-title.editable .rename-icon :deep(svg) { width: 13px; height: 13px; }
+.page-title.editable:hover .rename-icon { opacity: 0.6; }
+
+.page-title.rename-input {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-blue);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  outline: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  min-width: 200px;
 }
 
 .page-subtitle {

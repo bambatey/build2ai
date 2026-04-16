@@ -155,6 +155,15 @@ onMounted(async () => {
   if (isNewMode.value || projectStore.pendingNewProjectName) {
     chatStore.activeSessionId = null
     chatStore.messages = []
+    // Yeni proje akışında chat popup'ı otomatik aç
+    chatStore.popupAutoOpen = true
+    // Dashboard'dan hero prompt ile geldiyse → ilk mesajı otomatik gönder
+    const seed = projectStore.pendingInitialMessage
+    if (seed) {
+      projectStore.pendingInitialMessage = null
+      // sendMessage zaten pendingNewProjectName varsa projeyi commit edip chat açar
+      chatStore.sendMessage(seed)
+    }
   } else if (projectStore.activeProjectId) {
     chatStore.ensureSessionForProject(projectStore.activeProjectId)
   } else {
