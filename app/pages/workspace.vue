@@ -13,7 +13,6 @@
             <WorkspaceDrawingCanvas v-if="leftView === 'canvas'" @export="handleSketchExport" />
             <WorkspaceAdvancedOptions v-else-if="leftView === 'advanced'" />
             <WorkspaceModel3DPreview v-else-if="leftView === '3d'" />
-            <WorkspaceAnalysisPanel v-else-if="leftView === 'analysis'" />
 
             <!-- Floating View Toggle -->
             <div class="view-toggle floating">
@@ -46,10 +45,10 @@
               </button>
               <button
                 type="button"
-                class="toggle-btn"
-                :class="{ active: leftView === 'analysis' }"
-                title="Yapısal Analiz"
-                @click="leftView = 'analysis'"
+                class="toggle-btn analysis-nav"
+                :disabled="!canOpenAnalysis"
+                title="Yapısal Analiz (ayrı sayfa)"
+                @click="goToAnalysis"
               >
                 <Icon name="lucide:bar-chart-3" />
               </button>
@@ -112,7 +111,21 @@ const projectStore = useProjectStore()
 
 const isNewMode = computed(() => route.query.mode === 'new')
 const activeProject = computed(() => projectStore.activeProject)
-const leftView = ref<'canvas' | 'advanced' | '3d' | 'analysis'>('canvas')
+const leftView = ref<'canvas' | 'advanced' | '3d'>('canvas')
+
+const canOpenAnalysis = computed(() => {
+  const f = projectStore.currentFile
+  return !!projectStore.activeProjectId && !!f && f.format === '.s2k'
+})
+
+function goToAnalysis() {
+  if (!canOpenAnalysis.value) return
+  const pid = projectStore.activeProjectId
+  const fid = projectStore.currentFile?.id
+  if (pid && fid) {
+    router.push(`/workspace/${pid}/files/${fid}/analysis`)
+  }
+}
 
 // Panel widths
 const drawingWidth = ref(700)
@@ -293,6 +306,17 @@ onBeforeUnmount(() => {
 .toggle-btn.active {
   background: var(--accent-blue);
   color: white;
+}
+
+.toggle-btn.analysis-nav {
+  border-top: 1px solid var(--border-default);
+  margin-top: 2px;
+  padding-top: 4px;
+  color: var(--accent-blue);
+}
+.toggle-btn.analysis-nav:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .toggle-btn :deep(svg) {

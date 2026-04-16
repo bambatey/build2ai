@@ -74,6 +74,8 @@ export interface ModelSummary {
   n_modes?: number
   fundamental_period?: number
   max_displacement: number
+  /** Çözümde bulunan tüm case + combo id'leri (summary'den lazy kaynak). */
+  available_cases?: string[]
 }
 
 export interface AnalysisStatus {

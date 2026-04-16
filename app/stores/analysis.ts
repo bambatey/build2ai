@@ -1,3 +1,8 @@
+/**
+ * Yapısal analiz store — SAP2000 mantığı: analiz bir kere çalışır,
+ * her tablo (displacements, reactions, modes, forces) ayrı endpoint'ten
+ * lazy yüklenir. İlk tıklamada fetch, sonrasında cache'den okunur.
+ */
 import { defineStore } from 'pinia'
 
 import {
@@ -10,6 +15,7 @@ import {
   type NodeDisplacement,
   type Reaction,
   deleteAnalysis as apiDelete,
+  getAnalysis,
   getDisplacements,
   getElementForces,
   getModes,
@@ -19,14 +25,20 @@ import {
   triggerAnalysis,
 } from '~/utils/analysisApi'
 
+type TableKind = 'displacements' | 'reactions' | 'modes' | 'forces'
+
 interface FileAnalyses {
   history: AnalysisListItem[]
   currentId: string | null
   status: AnalysisStatus | null
+  // Tablo verileri — başta boş, tab açılınca doldurulur
   displacements: NodeDisplacement[]
   reactions: Reaction[]
   modes: Mode[]
   elementForces: ElementForces[]
+  // "bu analiz id'si için hangi tablolar yüklendi" cache'i
+  loadedFor: Partial<Record<TableKind, string>>
+  loading: Partial<Record<TableKind, boolean>>
   selectedLoadCase: string | null
   preview: ModelPreview | null
 }
@@ -40,6 +52,8 @@ function emptyFileState(): FileAnalyses {
     reactions: [],
     modes: [],
     elementForces: [],
+    loadedFor: {},
+    loading: {},
     selectedLoadCase: null,
     preview: null,
   }
@@ -47,7 +61,6 @@ function emptyFileState(): FileAnalyses {
 
 export const useAnalysisStore = defineStore('analysis', {
   state: () => ({
-    /** fileId → analiz durumu */
     byFile: {} as Record<string, FileAnalyses>,
     isRunning: false,
     runningError: '' as string,
@@ -63,9 +76,14 @@ export const useAnalysisStore = defineStore('analysis', {
     availableLoadCases() {
       return (fileId: string): string[] => {
         const s = this.current(fileId)
+        // Öncelik: summary.available_cases (tablo yüklenmesini beklemez).
+        const fromSummary = s.status?.summary?.available_cases ?? []
+        if (fromSummary.length > 0) return [...fromSummary].sort()
+        // Fallback: yüklenmiş tablolardan türetilir.
         const set = new Set<string>()
         s.displacements.forEach(d => set.add(d.load_case))
         s.reactions.forEach(r => set.add(r.load_case))
+        s.elementForces.forEach(f => set.add(f.load_case))
         return [...set].sort()
       }
     },
@@ -93,6 +111,19 @@ export const useAnalysisStore = defineStore('analysis', {
         return s.elementForces.filter(f => f.load_case === s.selectedLoadCase)
       }
     },
+
+    isTableLoading() {
+      return (fileId: string, kind: TableKind): boolean => {
+        return !!this.current(fileId).loading[kind]
+      }
+    },
+
+    isTableLoaded() {
+      return (fileId: string, kind: TableKind): boolean => {
+        const s = this.current(fileId)
+        return s.currentId != null && s.loadedFor[kind] === s.currentId
+      }
+    },
   },
 
   actions: {
@@ -112,9 +143,19 @@ export const useAnalysisStore = defineStore('analysis', {
         const status = await triggerAnalysis(projectId, fileId, options)
         state.status = status
         state.currentId = status.analysis_id
-        if (status.status === 'completed') {
-          await this.loadResults(projectId, fileId, status.analysis_id)
+        // Yeni analiz — tüm tablo cache'lerini sıfırla
+        state.displacements = []
+        state.reactions = []
+        state.modes = []
+        state.elementForces = []
+        state.loadedFor = {}
+        // Case seçicisini mümkünse summary'den ayarla
+        const available = status.summary?.available_cases ?? []
+        if (available.length > 0 && !available.includes(state.selectedLoadCase ?? '')) {
+          state.selectedLoadCase = available[0] ?? null
         }
+        // History'e ekle
+        await this.refreshHistory(projectId, fileId)
       } catch (e: any) {
         console.error('[Analysis] run error:', e)
         this.runningError = e?.message ?? 'Analiz başarısız'
@@ -123,23 +164,89 @@ export const useAnalysisStore = defineStore('analysis', {
       }
     },
 
-    async loadResults(projectId: string, fileId: string, analysisId: string) {
+    /** Sadece status + history yükle, tablo verilerini çekme. */
+    async selectAnalysis(projectId: string, fileId: string, analysisId: string) {
       const state = this._ensure(fileId)
-      const [disps, reacts, modes, forces] = await Promise.all([
-        getDisplacements(projectId, fileId, analysisId),
-        getReactions(projectId, fileId, analysisId),
-        getModes(projectId, fileId, analysisId).catch(() => [] as Mode[]),
-        getElementForces(projectId, fileId, analysisId).catch(
-          () => [] as ElementForces[],
-        ),
-      ])
-      state.displacements = disps
-      state.reactions = reacts
-      state.modes = modes
-      state.elementForces = forces
-      if (!state.selectedLoadCase) {
-        const cases = [...new Set(disps.map(d => d.load_case))].sort()
-        state.selectedLoadCase = cases[0] ?? null
+      if (state.currentId === analysisId && state.status) return
+      state.currentId = analysisId
+      // Tablo cache'lerini sıfırla (yeni analize geçildi)
+      state.displacements = []
+      state.reactions = []
+      state.modes = []
+      state.elementForces = []
+      state.loadedFor = {}
+      try {
+        state.status = await getAnalysis(projectId, fileId, analysisId)
+        const available = state.status?.summary?.available_cases ?? []
+        if (available.length > 0 && !available.includes(state.selectedLoadCase ?? '')) {
+          state.selectedLoadCase = available[0] ?? null
+        }
+      } catch (e) {
+        console.error('[Analysis] selectAnalysis error:', e)
+      }
+    },
+
+    async loadDisplacements(projectId: string, fileId: string, analysisId: string) {
+      const state = this._ensure(fileId)
+      if (state.loadedFor.displacements === analysisId) return
+      if (state.loading.displacements) return
+      state.loading.displacements = true
+      try {
+        state.displacements = await getDisplacements(projectId, fileId, analysisId)
+        state.loadedFor.displacements = analysisId
+      } catch (e) {
+        console.error('[Analysis] loadDisplacements error:', e)
+        state.displacements = []
+      } finally {
+        state.loading.displacements = false
+      }
+    },
+
+    async loadReactions(projectId: string, fileId: string, analysisId: string) {
+      const state = this._ensure(fileId)
+      if (state.loadedFor.reactions === analysisId) return
+      if (state.loading.reactions) return
+      state.loading.reactions = true
+      try {
+        state.reactions = await getReactions(projectId, fileId, analysisId)
+        state.loadedFor.reactions = analysisId
+      } catch (e) {
+        console.error('[Analysis] loadReactions error:', e)
+        state.reactions = []
+      } finally {
+        state.loading.reactions = false
+      }
+    },
+
+    async loadModes(projectId: string, fileId: string, analysisId: string) {
+      const state = this._ensure(fileId)
+      if (state.loadedFor.modes === analysisId) return
+      if (state.loading.modes) return
+      state.loading.modes = true
+      try {
+        state.modes = await getModes(projectId, fileId, analysisId)
+        state.loadedFor.modes = analysisId
+      } catch (e) {
+        console.error('[Analysis] loadModes error:', e)
+        state.modes = []
+      } finally {
+        state.loading.modes = false
+      }
+    },
+
+    async loadForces(projectId: string, fileId: string, analysisId: string) {
+      const state = this._ensure(fileId)
+      if (state.loadedFor.forces === analysisId) return
+      if (state.loading.forces) return
+      state.loading.forces = true
+      try {
+        state.elementForces = await getElementForces(projectId, fileId, analysisId)
+        state.loadedFor.forces = analysisId
+      } catch (e) {
+        console.error('[Analysis] loadForces error:', e)
+        state.elementForces = []
+      } finally {
+        state.loading.forces = false
       }
     },
 
@@ -159,9 +266,9 @@ export const useAnalysisStore = defineStore('analysis', {
       try {
         state.history = await listAnalyses(projectId, fileId)
         if (!state.currentId && state.history.length > 0) {
-          // En yeni analizi otomatik seç
-          state.currentId = state.history[0]!.analysis_id
-          await this.loadResults(projectId, fileId, state.currentId)
+          // En yeni analizi otomatik seç (ama tablo yükleme — lazy)
+          const latestId = state.history[0]!.analysis_id
+          await this.selectAnalysis(projectId, fileId, latestId)
         }
       } catch (e) {
         console.error('[Analysis] refreshHistory error:', e)
@@ -183,7 +290,9 @@ export const useAnalysisStore = defineStore('analysis', {
           state.status = null
           state.displacements = []
           state.reactions = []
+          state.modes = []
           state.elementForces = []
+          state.loadedFor = {}
         }
       } catch (e) {
         console.error('[Analysis] remove error:', e)
