@@ -1766,9 +1766,4 @@ function momentCls(v: number, max: number): string {
   color: var(--text-secondary);
   font-size: 0.8125rem;
 }
-.force-empty :global(.icon) {
-  vertical-align: -3px;
-  margin-right: 0.4rem;
-  opacity: 0.7;
-}
 </style>
