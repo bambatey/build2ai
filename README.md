@@ -20,3 +20,23 @@
       server_name 45.88.137.131;
       return 301 https://$server_name$request_uri;
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  pyardiso = solver
+  stifness 
+  shader language 3d 
+
+  1. dinamik anliz time hsitory anlaiz
+  2. push over anlaiz
