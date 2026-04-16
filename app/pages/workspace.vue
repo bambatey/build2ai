@@ -123,7 +123,7 @@ function goToAnalysis() {
   const pid = projectStore.activeProjectId
   const fid = projectStore.currentFile?.id
   if (pid && fid) {
-    router.push(`/workspace/${pid}/files/${fid}/analysis`)
+    router.push(`/analysis/${pid}/${fid}`)
   }
 }
 
