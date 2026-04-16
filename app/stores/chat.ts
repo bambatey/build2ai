@@ -212,9 +212,14 @@ export const useChatStore = defineStore('chat', {
       }
 
       try {
-        // Token'ı useAuth state'inden al
-        const { token } = useAuth()
-        const authToken = token.value
+        // Fresh token — Firebase SDK gerekirse internally refresh eder
+        // (useAuth state.token snapshot'ı 1 saat sonra bayat olur ve
+        // backend 401 "Geçersiz Firebase token" döndürür).
+        const { getAuth } = await import('firebase/auth')
+        const firebaseAuth = getAuth()
+        const authToken = firebaseAuth.currentUser
+          ? await firebaseAuth.currentUser.getIdToken()
+          : null
 
         console.log('[Chat] Streaming request:', API_BASE, 'token:', authToken ? 'present' : 'missing')
 
