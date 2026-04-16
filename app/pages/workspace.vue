@@ -49,6 +49,16 @@
           >
             <Icon name="lucide:bar-chart-3" />
           </button>
+          <div class="toggle-divider" />
+          <button
+            type="button"
+            class="toggle-btn"
+            :disabled="!canDownload"
+            :title="canDownload ? `İndir: ${projectStore.currentFile?.name}` : 'İndirilebilir dosya yok'"
+            @click="downloadCurrentFile"
+          >
+            <Icon name="lucide:download" />
+          </button>
         </div>
 
         <WorkspaceDrawingPopup />
@@ -107,6 +117,32 @@ const canOpenAnalysis = computed(() => {
   const f = projectStore.currentFile
   return !!projectStore.activeProjectId && !!f && f.format === '.s2k'
 })
+
+const canDownload = computed(() => {
+  const f = projectStore.currentFile
+  if (!f) return false
+  return !!(projectStore.modifiedContent || projectStore.originalContent || f.content)
+})
+
+function downloadCurrentFile() {
+  const f = projectStore.currentFile
+  if (!f) return
+  const content =
+    projectStore.modifiedContent
+    || projectStore.originalContent
+    || f.content
+    || ''
+  if (!content) return
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = f.name || 'model.s2k'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 
 function goToAnalysis() {
   if (!canOpenAnalysis.value) return
@@ -230,12 +266,19 @@ onMounted(async () => {
 
 .view-toggle {
   display: flex;
+  align-items: center;
   gap: 2px;
   padding: 3px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.toggle-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-default);
+  margin: 0 4px;
 }
 
 /* FAB'ları parent flow'a al (fixed yerine) */
