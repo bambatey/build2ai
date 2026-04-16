@@ -89,7 +89,10 @@ const handleDelete = (id: string) => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   padding: 0.75rem 0.5rem;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .history-header {
@@ -134,9 +137,11 @@ const handleDelete = (id: string) => {
 .history-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
+  min-width: 0;
 }
 
 .history-empty {
@@ -147,7 +152,6 @@ const handleDelete = (id: string) => {
 }
 
 .history-item {
-  width: 100%;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -159,8 +163,10 @@ const handleDelete = (id: string) => {
   text-align: left;
   color: var(--text-secondary);
   font-size: 0.8125rem;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
   position: relative;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .history-item:hover {
@@ -181,30 +187,42 @@ const handleDelete = (id: string) => {
 
 .item-name {
   flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .item-delete {
-  display: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
+  border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
 }
 
 .item-delete:hover {
-  color: var(--accent-red);
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .item-delete :deep(svg) {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 .history-item:hover .item-delete {
-  display: flex;
+  opacity: 0.7;
+}
+.history-item:hover .item-delete:hover {
+  opacity: 1;
 }
 </style>

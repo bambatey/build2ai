@@ -313,19 +313,25 @@ const loadModel = async () => {
   if (!scene && mountEl.value) {
     initThree()
   }
+  const text = activeS2KContent.value
+  // İçerik henüz yüklenmediyse loading state'te kal, hata gösterme.
+  // Content hazır olunca watch(activeS2KContent) yeniden tetikleyecek.
+  if (!text) {
+    loading.value = true
+    return
+  }
   loading.value = true
   error.value = ''
   try {
-    const text = activeS2KContent.value
-    if (!text) {
-      throw new Error('Aktif projede .s2k / .e2k dosyası yok')
-    }
     const parsed = parseS2K(text)
     if (parsed.joints.length === 0) {
-      throw new Error('Modelden düğüm okunamadı')
+      // Parse başarılı ama boş — muhtemelen minimal/bozuk dosya.
+      // Yine de sessizce boş canvas göster.
+      model.value = null
+    } else {
+      model.value = parsed
+      buildScene(parsed)
     }
-    model.value = parsed
-    buildScene(parsed)
   } catch (e: any) {
     error.value = e?.message ?? 'Bilinmeyen hata'
   } finally {
@@ -390,16 +396,23 @@ watch(() => projectStore.activeProjectId, async (newId, oldId) => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
+  padding: 0.5rem 0.875rem;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   z-index: 10;
+}
+.m3d-status :deep(svg) {
+  width: 14px !important;
+  height: 14px !important;
+  color: var(--accent-blue);
 }
 
 .m3d-status.error {
