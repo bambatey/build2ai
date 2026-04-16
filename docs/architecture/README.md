@@ -93,3 +93,86 @@ Bu klasör, Build2AI'ın **uzun vadeli mimari kararlarını ve teknik araştırm
 06 son → en uzun + en risk yüksek (TBDY validation kritik); önceki her şey hazır olduğunda yapılmalı
 
 *Son güncelleme: 2026-04-16 (mimari plan oturumu)*
+
+
+
+
+- [ ] Faz 2: Rust kernel'ler
+  - [ ] Build pipeline (cargo + maturin + wasm-pack)
+  - [ ] frame_local_stiffness
+  - [ ] section_forces
+  - [ ] PyO3 binding
+  - [ ] wasm-pack browser export
+
+bunları yapmadık di mi daha yani hala 01-performance.md yi btiirmeye çalışıcaz snra da 03'e geçicez
+Düzelteyim — aslında o iki checklist aynı işi anlatıyor, farklı perspektiflerden.
+
+01-performance.md Faz 2 = 03-rust-wasm-hybrid.md
+01-performance.md §1.7 Faz 2 kısmı → o topic'in perspektifinden "performance için ne yapılacak" özeti
+03-rust-wasm-hybrid.md → aynı işin mimari detaylı planı (Cargo.toml örneği, PyO3 binding, wasm-pack, CI/CD, test stratejisi, risk)
+Fiziksel olarak tek iş: build2ai-kernels/ Cargo workspace kurup pilot kernel yazmak. O iş tamamlandığında her iki dosyadaki Faz 2 checkbox'ları aynı anda işaretlenir.
+
+Yol haritasında neredeyiz
+
+✅ 1️⃣  01 Performance — Faz 1 (algoritmik + Rust-ready refactor)  ← BİTTİ
+⬜  2️⃣  03 Rust+WASM = 01 Faz 2                                    ← SIRADAKI
+⬜  3️⃣  04 Shader viz
+⬜  4️⃣  02 arq+Redis
+⬜  5️⃣  05+07 TH+Pushover
+⬜  6️⃣  06 DXF + Reinforcement
+Yani 01'de yapılacak başka iş yok — Faz 1'in kalan maddesi (numpy-array-first conversion) bilinçli olarak 03'e bağlandı (Rust zaten o formatı istiyor, iki kez refactor etmemek için).
+
+Başlayacağımız yer
+Sıradaki: 03 Rust+WASM pilot kernel. Konkre ilk işler:
+
+build2ai-kernels/ yeni crate oluştur (cargo init --lib)
+Cargo.toml — PyO3 + numpy + ndarray feature flag'leri
+maturin kurulumu (Python wheel builder)
+Pilot: frame_local_stiffness Rust'a port (zaten pure fonksiyon olarak hazır)
+Python tarafında characterization test — frame_local_stiffness_rust(args) == frame_local_stiffness_python(args) bit-for-bit
+İlk wheel 1-2 haftada çıkar. Başlayalım mı? Yoksa displacements/reactions endpoint'lerini de önce aynı mantıkla optimize edip "prod sağlamlaştırma" sprint'i kapatalım mı?
+
+04-shader-visualization.md
+peki biz hangi noktada lineer analiz gibi şu an yaptığımız analizleri user broswer üzerinden handle edip karmaşık işlemleri push over anlaysis gibi kısımları server side halletmeye başlaycağız ya da dökümanalrda öyle bir plan yok mu acaba
+Plan var ve çok net, şu an 03-rust-wasm-hybrid.md §3.7 ve 02-scaling-arq-redis.md §2.1 ikilisinde tanımlı. Özet:
+
+Hybrid dispatch kuralı (doküman, §3.7)
+
+const COMPLEXITY_THRESHOLD = 5000  // DOF
+
+if (complexity < 5000) → browser (WASM)
+else                   → server (arq queue + Rust PyO3)
+Kademeli açılış
+Analiz tipi	Browser	Server	Zorunlu server
+Linear static < 5K DOF	✅		
+Linear static 5K-20K DOF	⚠️	✅ opt	
+Linear static > 20K DOF	❌	✅	
+Modal < 20K DOF	✅		
+Modal Time History (orta)	✅		
+Direct Time History (büyük)	❌		ZORUNLU
+Pushover (büyük model)	❌		ZORUNLU
+Timeline'da tam yeri
+
+✅ Faz 1        Her şey server-side (şimdiki durum — FastAPI pipeline)
+                ↓
+⬜ Faz 2 / 03   Rust+WASM kernel'ler yazılır
+   ├─ Adım 1-2: Server-side PyO3 (backend hızlanır, hâlâ server'da)
+   └─ Adım 3:   WASM bundle frontend'e entegre edilir
+                ↓
+                **İŞTE BU ANDA** browser-side dispatch başlar
+                — küçük model browser'da, büyük model server'a fallback
+                ↓
+⬜ Faz 2 / 02   arq+Redis queue kurulur (heavy fallback altyapısı)
+⬜ Faz 3 / 05   Modal TH → browser-side (küçük-orta model)
+                Direct TH → server-side zorunlu, queue üzerinden
+⬜ Faz 3 / 07   Pushover nonlineer → server-side zorunlu
+Pratik olarak ne zaman hissedilecek?
+3-4 ay sonra: 03'ün Adım 3'ü bittiğinde. O güne kadar kullanıcının "Analiz Et" butonu hep server'ı çalıştırıyor. Adım 3 merge olduğu gün, küçük model açan kullanıcı /analyze endpoint'ini hiç çağırmayacak — browser WASM'ı local'de çalıştırıp sonucu gösterecek. Kullanıcı bunu "süper hızlı oldu" olarak fark eder, altyapı fark etmez.
+
+6-8 ay sonra: TH/Pushover geldiğinde queue devreye girer. Heavy job submit edilir, WebSocket üzerinden progress gelir, bittiğinde 3D viz açılır (docs/architecture/02-scaling-arq-redis.md §2.4).
+
+Yani şu sırayla patlar
+Server-side Rust (hâlâ server) → pipeline 10-100× hızlanır
+Browser-side WASM → küçük modeller için server'a hiç gitmez
+arq+Redis + TH/Pushover → heavy işler queue'dan background'da çalışır
+Hepsi bağımsız mikro-kazanç veriyor, sıra da budur. Yani: 03 Adım 3 = kullanıcı browser'da analiz yapabileceği an.

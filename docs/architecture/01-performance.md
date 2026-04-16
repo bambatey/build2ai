@@ -214,15 +214,15 @@ def compute_forces(K, u):
 
 ## 1.7 Implementation Status
 
-- [ ] Faz 1: Algoritmik optimizasyon
-  - [ ] Combo süperpoze
-  - [ ] K_local cache
-  - [ ] Station count default 3
-  - [ ] Binary serialization (msgpack)
-- [ ] Faz 1: Rust-friendly refactor
-  - [ ] Hot path identification (`# RUST_KERNEL_CANDIDATE`)
-  - [ ] Pure function conversion
-  - [ ] numpy-array-first conversion
+- [x] Faz 1: Algoritmik optimizasyon
+  - [x] Combo süperpoze (zaten pipeline `_combine`'de yapılıyor — U/P/q lineer birleştiriliyor)
+  - [x] K_local cache (`elements/frame_kernel.py` — K_local + K_local_released + T + TE + sw_w frame başına 1×)
+  - [x] Station count default 3 (`recovery/element_forces.py` `n_stations=3`)
+  - [x] Binary serialization (msgpack) — `storage_service.upload_msgpack_gzip`, yeni kayıtlar `.mpack.gz`, eski `.json.gz` geriye uyumlu
+- [x] Faz 1: Rust-friendly refactor
+  - [x] Hot path identification (`# RUST_KERNEL_CANDIDATE` işaretleri: frame_3d, load_assembler, element_forces hot kernel'leri)
+  - [x] Pure function conversion (`frame_local_stiffness`, `frame_element_axes_transform`, `node_euler_transform`, `frame_local_to_global_transform`, `direction_cosines`, `condense_released_dofs`, `_local_load_vector`, `_distributed_to_local_q_pure`, `_self_weight_local_q_pure`)
+  - [ ] numpy-array-first conversion (dataclass→ndarray bulk refactor — Faz 2'de Rust port'la birlikte)
 - [ ] Faz 2: Rust kernel'ler
   - [ ] Build pipeline (cargo + maturin + wasm-pack)
   - [ ] frame_local_stiffness
