@@ -4,65 +4,59 @@
     <div v-if="activeProject" class="workspace-content">
       <div class="workspace-panels">
         <!-- Sol Panel (Canvas veya Advanced Options) -->
-        <div
-          ref="drawingPanel"
-          class="drawing-panel"
-          :style="{ flexBasis: `${drawingWidth}px`, maxWidth: `${drawingWidth}px` }"
-        >
+        <div class="drawing-panel full-width">
           <div class="left-panel-content">
             <WorkspaceDrawingCanvas v-if="leftView === 'canvas'" @export="handleSketchExport" />
             <WorkspaceAdvancedOptions v-else-if="leftView === 'advanced'" />
             <WorkspaceModel3DPreview v-else-if="leftView === '3d'" />
 
-            <!-- Floating View Toggle -->
-            <div class="view-toggle floating">
-              <button
-                type="button"
-                class="toggle-btn"
-                :class="{ active: leftView === 'canvas' }"
-                title="Canvas"
-                @click="leftView = 'canvas'"
-              >
-                <Icon name="lucide:pen-tool" />
-              </button>
-              <button
-                type="button"
-                class="toggle-btn"
-                :class="{ active: leftView === 'advanced' }"
-                title="Gelişmiş Analizler"
-                @click="leftView = 'advanced'"
-              >
-                <Icon name="lucide:sliders-horizontal" />
-              </button>
-              <button
-                type="button"
-                class="toggle-btn"
-                :class="{ active: leftView === '3d' }"
-                title="3D Önizleme"
-                @click="leftView = '3d'"
-              >
-                <Icon name="lucide:box" />
-              </button>
-              <button
-                type="button"
-                class="toggle-btn analysis-nav"
-                :disabled="!canOpenAnalysis"
-                title="Yapısal Analiz (ayrı sayfa)"
-                @click="goToAnalysis"
-              >
-                <Icon name="lucide:bar-chart-3" />
-              </button>
-            </div>
           </div>
         </div>
 
-        <!-- Resizer -->
-        <div class="panel-resizer" @mousedown="startResize($event)" />
+      </div>
 
-        <!-- Chat Panel -->
-        <div class="chat-panel">
-          <WorkspaceChatPanel />
+      <!-- Sağ alt köşe: toggle bar + chat FAB yan yana -->
+      <div class="bottom-right-bar">
+        <div class="view-toggle">
+          <button
+            type="button"
+            class="toggle-btn"
+            :class="{ active: leftView === 'canvas' }"
+            title="Canvas"
+            @click="leftView = 'canvas'"
+          >
+            <Icon name="lucide:pen-tool" />
+          </button>
+          <button
+            type="button"
+            class="toggle-btn"
+            :class="{ active: leftView === 'advanced' }"
+            title="Gelişmiş Analizler"
+            @click="leftView = 'advanced'"
+          >
+            <Icon name="lucide:sliders-horizontal" />
+          </button>
+          <button
+            type="button"
+            class="toggle-btn"
+            :class="{ active: leftView === '3d' }"
+            title="3D Önizleme"
+            @click="leftView = '3d'"
+          >
+            <Icon name="lucide:box" />
+          </button>
+          <button
+            type="button"
+            class="toggle-btn "
+            :disabled="!canOpenAnalysis"
+            title="Yapısal Analiz (ayrı sayfa)"
+            @click="goToAnalysis"
+          >
+            <Icon name="lucide:bar-chart-3" />
+          </button>
         </div>
+
+        <AnalysisChatPopup />
       </div>
     </div>
 
@@ -90,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useChatStore } from '~/stores/chat'
 import { useProjectStore } from '~/stores/project'
@@ -111,7 +105,7 @@ const projectStore = useProjectStore()
 
 const isNewMode = computed(() => route.query.mode === 'new')
 const activeProject = computed(() => projectStore.activeProject)
-const leftView = ref<'canvas' | 'advanced' | '3d'>('canvas')
+const leftView = ref<'canvas' | 'advanced' | '3d'>('3d')
 
 const canOpenAnalysis = computed(() => {
   const f = projectStore.currentFile
@@ -127,16 +121,6 @@ function goToAnalysis() {
   }
 }
 
-// Panel widths
-const drawingWidth = ref(700)
-const isResizing = ref(false)
-const startX = ref(0)
-const startWidth = ref(0)
-
-const MIN_LEFT = 280
-const MIN_CHAT = 320
-const RESIZER_WIDTH = 4
-const SIDEBAR_WIDTH = 240
 
 // Aktif proje değişince ilgili chat session'a geç
 watch(
@@ -167,67 +151,13 @@ const handleSketchExport = (data: { image: string; shapes: any; prompt: string }
   chatStore.sendMessage(`${data.prompt}\n\n[Taslak çizim eklendi - ${Object.values(data.shapes).flat().length} şekil]`)
 }
 
-const getMaxLeftWidth = () => {
-  if (typeof window === 'undefined') return 1000
-  return Math.max(MIN_LEFT, window.innerWidth - SIDEBAR_WIDTH - RESIZER_WIDTH - MIN_CHAT)
-}
-
-const clampLeftWidth = () => {
-  const max = getMaxLeftWidth()
-  if (drawingWidth.value > max) drawingWidth.value = max
-  if (drawingWidth.value < MIN_LEFT) drawingWidth.value = MIN_LEFT
-}
-
-const startResize = (event: MouseEvent) => {
-  isResizing.value = true
-  startX.value = event.clientX
-  startWidth.value = drawingWidth.value
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-}
-
-const handleMouseMove = (event: MouseEvent) => {
-  if (!isResizing.value) return
-  const delta = event.clientX - startX.value
-  const maxAllowed = getMaxLeftWidth()
-  drawingWidth.value = Math.max(MIN_LEFT, Math.min(maxAllowed, startWidth.value + delta))
-}
-
-const stopResize = () => {
-  isResizing.value = false
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-}
-
-const handleWindowResize = () => {
-  clampLeftWidth()
-}
-
 onMounted(() => {
-  // Yeni proje akışındaysak chat'i temiz tut, hydrate etme
   if (isNewMode.value || projectStore.pendingNewProjectName) {
     chatStore.activeSessionId = null
     chatStore.messages = []
   } else if (projectStore.activeProjectId) {
     chatStore.ensureSessionForProject(projectStore.activeProjectId)
   }
-
-  // Canvas ve chat'i ortadan ikiye böl
-  if (typeof window !== 'undefined') {
-    const available = window.innerWidth - SIDEBAR_WIDTH - RESIZER_WIDTH
-    drawingWidth.value = Math.max(MIN_LEFT, Math.floor(available / 2))
-  }
-
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', stopResize)
-  window.addEventListener('resize', handleWindowResize)
-  clampLeftWidth()
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('mousemove', handleMouseMove)
-  document.removeEventListener('mouseup', stopResize)
-  window.removeEventListener('resize', handleWindowResize)
 })
 </script>
 
@@ -261,6 +191,20 @@ onBeforeUnmount(() => {
   flex-shrink: 1;
   position: relative;
 }
+.drawing-panel.full-width {
+  flex: 1;
+  max-width: 100%;
+}
+
+.bottom-right-bar {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
 .view-toggle {
   display: flex;
@@ -269,14 +213,14 @@ onBeforeUnmount(() => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.view-toggle.floating {
-  position: absolute;
-  bottom: 82px;
-  right: 8px;
-  z-index: 20;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+/* Chat FAB'ı parent flow'a al (fixed yerine) */
+.bottom-right-bar :deep(.chat-fab) {
+  position: relative;
+  right: auto;
+  bottom: auto;
 }
 
 .left-panel-content {
@@ -308,16 +252,6 @@ onBeforeUnmount(() => {
   color: white;
 }
 
-.toggle-btn.analysis-nav {
-  border-top: 1px solid var(--border-default);
-  margin-top: 2px;
-  padding-top: 4px;
-  color: var(--accent-blue);
-}
-.toggle-btn.analysis-nav:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 .toggle-btn :deep(svg) {
   width: 16px;
@@ -329,24 +263,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.chat-panel {
-  flex: 1 1 0;
-  overflow: hidden;
-  min-width: 320px;
-  height: 100%;
-}
-
-.panel-resizer {
-  width: 4px;
-  background: var(--border-default);
-  cursor: col-resize;
-  transition: background 0.2s;
-  flex-shrink: 0;
-}
-
-.panel-resizer:hover {
-  background: var(--accent-blue);
-}
 
 /* Empty state */
 .empty-state {

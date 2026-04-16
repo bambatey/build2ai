@@ -4,7 +4,6 @@
     v-if="collapsed"
     type="button"
     class="chat-fab"
-    :style="fabStyle"
     title="AI sohbet (modeli editlemek için)"
     @click="openPopup"
   >
@@ -155,6 +154,8 @@ void chatStore
 <style scoped>
 .chat-fab {
   position: fixed;
+  right: 16px;
+  bottom: 16px;
   z-index: 100;
   width: 56px;
   height: 56px;
