@@ -40,6 +40,9 @@ export const useChatStore = defineStore('chat', {
     totalMessageCount: 0,
     totalSessionCount: 0,
     popupAutoOpen: false,   // workspace'te mount olduğunda açılsın mı (yeni proje için)
+    // Popup açık/kapalı durumu — bottom-right-bar konumlandırması için
+    popupOpen: false,
+    drawingPopupOpen: false,
     model: '' as string,  // Boş = backend'in default modeli kullanılır
     quickCommands: [
       {

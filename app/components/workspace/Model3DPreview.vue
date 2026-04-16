@@ -308,15 +308,26 @@ const activeS2KContent = computed<string | null>(() => {
   return file?.content ?? null
 })
 
+function clearModelFromScene() {
+  if (!scene) return
+  const toRemove: THREE.Object3D[] = []
+  scene.traverse(o => {
+    if ((o as any).userData?.modelPart) toRemove.push(o)
+  })
+  toRemove.forEach(o => scene!.remove(o))
+}
+
 const loadModel = async () => {
   // Scene yoksa init et (sekme geçişi sonrası)
   if (!scene && mountEl.value) {
     initThree()
   }
   const text = activeS2KContent.value
-  // İçerik henüz yüklenmediyse loading state'te kal, hata gösterme.
-  // Content hazır olunca watch(activeS2KContent) yeniden tetikleyecek.
+  // İçerik yoksa: önceki modeli temizle, loading state'te kal
   if (!text) {
+    clearModelFromScene()
+    model.value = null
+    error.value = ''
     loading.value = true
     return
   }
@@ -325,14 +336,16 @@ const loadModel = async () => {
   try {
     const parsed = parseS2K(text)
     if (parsed.joints.length === 0) {
-      // Parse başarılı ama boş — muhtemelen minimal/bozuk dosya.
-      // Yine de sessizce boş canvas göster.
+      // Parse başarılı ama boş → eski modeli temizle, sessizce boş canvas göster
+      clearModelFromScene()
       model.value = null
     } else {
       model.value = parsed
       buildScene(parsed)
     }
   } catch (e: any) {
+    clearModelFromScene()
+    model.value = null
     error.value = e?.message ?? 'Bilinmeyen hata'
   } finally {
     loading.value = false
@@ -358,21 +371,19 @@ onBeforeUnmount(() => {
   controls = null
 })
 
-// Dosya içeriği değişirse yeniden yükle
+// Dosya içeriği değişirse yeniden yükle — null → null/değer geçişlerinde de
+// çalışır, eski modeli temizler. loadModel kendi no-content durumunu ele alır.
 watch(activeS2KContent, (newVal, oldVal) => {
-  if (newVal && newVal !== oldVal) {
-    console.log('[3D] Content değişti, model yeniden yükleniyor...', newVal.length, 'char')
-    loadModel()
-  }
+  if (newVal !== oldVal) loadModel()
 })
 
-// Aktif proje değiştiğinde modeli yeniden yükle
-watch(() => projectStore.activeProjectId, async (newId, oldId) => {
-  if (newId && newId !== oldId) {
-    console.log('[3D] Proje değişti:', newId)
-    // Dosya yüklenene kadar kısa bekle
-    await new Promise(resolve => setTimeout(resolve, 500))
-    loadModel()
+// Aktif proje değiştiğinde: önce eski modeli temizle, sonra yeni içeriğin
+// yüklenmesini bekle. activeS2KContent watch'i devamını halleder.
+watch(() => projectStore.activeProjectId, (newId, oldId) => {
+  if (newId !== oldId) {
+    clearModelFromScene()
+    model.value = null
+    loading.value = true
   }
 })
 </script>

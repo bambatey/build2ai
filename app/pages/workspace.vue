@@ -6,27 +6,22 @@
         <!-- Sol Panel (Canvas veya Advanced Options) -->
         <div class="drawing-panel full-width">
           <div class="left-panel-content">
-            <WorkspaceDrawingCanvas v-if="leftView === 'canvas'" @export="handleSketchExport" />
-            <WorkspaceAdvancedOptions v-else-if="leftView === 'advanced'" />
+            <WorkspaceAdvancedOptions v-if="leftView === 'advanced'" />
             <WorkspaceModel3DPreview v-else-if="leftView === '3d'" />
-
           </div>
         </div>
 
       </div>
 
-      <!-- Sağ alt köşe: toggle bar + chat FAB yan yana -->
-      <div class="bottom-right-bar">
+      <!-- Sağ alt köşe: toggle bar + drawing FAB + chat FAB yan yana -->
+      <div
+        class="bottom-right-bar"
+        :class="{
+          'chat-open': chatStore.popupOpen,
+          'drawing-open': chatStore.drawingPopupOpen,
+        }"
+      >
         <div class="view-toggle">
-          <button
-            type="button"
-            class="toggle-btn"
-            :class="{ active: leftView === 'canvas' }"
-            title="Canvas"
-            @click="leftView = 'canvas'"
-          >
-            <Icon name="lucide:pen-tool" />
-          </button>
           <button
             type="button"
             class="toggle-btn"
@@ -47,7 +42,7 @@
           </button>
           <button
             type="button"
-            class="toggle-btn "
+            class="toggle-btn"
             :disabled="!canOpenAnalysis"
             title="Yapısal Analiz (ayrı sayfa)"
             @click="goToAnalysis"
@@ -56,6 +51,7 @@
           </button>
         </div>
 
+        <WorkspaceDrawingPopup />
         <AnalysisChatPopup />
       </div>
     </div>
@@ -105,7 +101,7 @@ const projectStore = useProjectStore()
 
 const isNewMode = computed(() => route.query.mode === 'new')
 const activeProject = computed(() => projectStore.activeProject)
-const leftView = ref<'canvas' | 'advanced' | '3d'>('3d')
+const leftView = ref<'advanced' | '3d'>('3d')
 
 const canOpenAnalysis = computed(() => {
   const f = projectStore.currentFile
@@ -145,10 +141,6 @@ watch(
 
 const startNewProject = () => {
   projectStore.requestNewProject()
-}
-
-const handleSketchExport = (data: { image: string; shapes: any; prompt: string }) => {
-  chatStore.sendMessage(`${data.prompt}\n\n[Taslak çizim eklendi - ${Object.values(data.shapes).flat().length} şekil]`)
 }
 
 onMounted(async () => {
@@ -219,6 +211,21 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
+  transition: right 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Popup açıksa bar, popup'ın soluna kayar.
+   Chat: 420 + 16 + 12 = 448     → 452
+   Drawing: 720 + 16 + 12 = 748  → 748
+   Her ikisi: drawing chat'in solunda → 420 + 12 + 720 + 16 + 12 = 1180
+*/
+.bottom-right-bar.chat-open {
+  right: 452px;
+}
+.bottom-right-bar.drawing-open {
+  right: 748px;
+}
+.bottom-right-bar.chat-open.drawing-open {
+  right: 1180px;
 }
 
 .view-toggle {
@@ -231,8 +238,9 @@ onMounted(async () => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* Chat FAB'ı parent flow'a al (fixed yerine) */
-.bottom-right-bar :deep(.chat-fab) {
+/* FAB'ları parent flow'a al (fixed yerine) */
+.bottom-right-bar :deep(.chat-fab),
+.bottom-right-bar :deep(.draw-fab) {
   position: relative;
   right: auto;
   bottom: auto;

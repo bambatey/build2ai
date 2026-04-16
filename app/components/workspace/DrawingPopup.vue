@@ -1,30 +1,26 @@
 <template>
-  <!-- Collapsed: sağ alt köşe FAB -->
+  <!-- Collapsed: FAB -->
   <button
     v-if="collapsed"
     type="button"
-    class="chat-fab"
-    title="AI sohbet (modeli editlemek için)"
+    class="draw-fab"
+    title="Taslak çizimi (AI'a göndermek için)"
     @click="openPopup"
   >
-    <Icon name="lucide:message-circle" />
-    <span class="fab-badge" v-if="unreadCount > 0">{{ unreadCount }}</span>
+    <Icon name="lucide:pencil-ruler" />
   </button>
 
-  <!-- Expanded: floating draggable + resizable pencere -->
+  <!-- Expanded: draggable + resizable pencere -->
   <div
     v-else
-    class="chat-popup"
+    class="draw-popup"
     :style="popupStyle"
     :class="{ dragging: isDragging }"
   >
-    <header
-      class="popup-head"
-      @mousedown="startDrag"
-    >
+    <header class="popup-head" @mousedown="startDrag">
       <div class="head-title">
-        <Icon name="lucide:sparkles" />
-        AI Asistan
+        <Icon name="lucide:pencil-ruler" />
+        Taslak
       </div>
       <div class="head-actions">
         <button type="button" class="head-btn" title="Küçült" @click="collapse">
@@ -33,9 +29,8 @@
       </div>
     </header>
     <div class="popup-body">
-      <WorkspaceChatPanel />
+      <WorkspaceDrawingCanvas @export="handleExport" />
     </div>
-    <!-- Resize handles -->
     <div class="resize-corner" @mousedown.stop="startResize" />
   </div>
 </template>
@@ -46,30 +41,31 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '~/stores/chat'
 
 const chatStore = useChatStore()
-const collapsed = ref(true)           // default: kapalı
-const unreadCount = ref(0)            // ileride: son seen'den bu yana gelen msg
+const collapsed = ref(true)
 
-// Pencere konum + boyut (sağ-alt hizalı)
+// Pencere konum + boyut — chat popup'tan büyük
 const MARGIN = 16
-const defaultW = 420
-const defaultH = 560
+const CHAT_W = 420             // AnalysisChatPopup varsayılan genişliği
+const CHAT_GAP = 12            // chat popup ile arasındaki boşluk
+const defaultW = 720
+const defaultH = 520
 
-const x = ref(0)      // left (px)
-const y = ref(0)      // top (px)
+const x = ref(0)
+const y = ref(0)
 const w = ref(defaultW)
 const h = ref(defaultH)
 
-function placeBottomRight() {
+function placeNextToChat() {
   if (typeof window === 'undefined') return
-  x.value = window.innerWidth - w.value - MARGIN
-  y.value = window.innerHeight - h.value - MARGIN
+  if (chatStore.popupOpen) {
+    // Chat popup sağ altta sabit: left = innerWidth - CHAT_W - MARGIN
+    const chatLeft = window.innerWidth - CHAT_W - MARGIN
+    x.value = Math.max(MARGIN, chatLeft - w.value - CHAT_GAP)
+  } else {
+    x.value = Math.max(MARGIN, window.innerWidth - w.value - MARGIN)
+  }
+  y.value = Math.max(MARGIN, window.innerHeight - h.value - MARGIN)
 }
-
-// FAB konumu
-const fabStyle = computed(() => ({
-  right: `${MARGIN}px`,
-  bottom: `${MARGIN}px`,
-}))
 
 const popupStyle = computed(() => ({
   left: `${x.value}px`,
@@ -80,23 +76,39 @@ const popupStyle = computed(() => ({
 
 function openPopup() {
   collapsed.value = false
-  unreadCount.value = 0
-  placeBottomRight()
+  placeNextToChat()
 }
 function collapse() {
   collapsed.value = true
 }
+
+// Chat popup açılıp/kapanınca drawing popup'ı animasyonlu olarak yeniden
+// konumlandır (açıksa). CSS transition bu x değişimini smoothluyor.
+watch(() => chatStore.popupOpen, () => {
+  if (!collapsed.value) placeNextToChat()
+})
+
+// Kendi open/close durumunu store'a bildir (tutarlılık için)
+watch(collapsed, (v) => { chatStore.drawingPopupOpen = !v }, { immediate: true })
 
 // --- Drag
 const isDragging = ref(false)
 const dragStart = ref({ x: 0, y: 0, px: 0, py: 0 })
 
 function startDrag(e: MouseEvent) {
-  // Head-btn tıklamasıysa drag başlatma
   const target = e.target as HTMLElement
   if (target.closest('.head-btn')) return
   isDragging.value = true
   dragStart.value = { x: e.clientX, y: e.clientY, px: x.value, py: y.value }
+}
+
+// --- Resize
+const isResizing = ref(false)
+const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 })
+
+function startResize(e: MouseEvent) {
+  isResizing.value = true
+  resizeStart.value = { x: e.clientX, y: e.clientY, w: w.value, h: h.value }
 }
 
 function onMouseMove(e: MouseEvent) {
@@ -109,7 +121,7 @@ function onMouseMove(e: MouseEvent) {
   if (isResizing.value) {
     const dw = e.clientX - resizeStart.value.x
     const dh = e.clientY - resizeStart.value.y
-    w.value = Math.max(320, Math.min(window.innerWidth - x.value - 8, resizeStart.value.w + dw))
+    w.value = Math.max(480, Math.min(window.innerWidth - x.value - 8, resizeStart.value.w + dw))
     h.value = Math.max(360, Math.min(window.innerHeight - y.value - 8, resizeStart.value.h + dh))
   }
 }
@@ -119,89 +131,60 @@ function onMouseUp() {
   isResizing.value = false
 }
 
-// --- Resize
-const isResizing = ref(false)
-const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 })
-
-function startResize(e: MouseEvent) {
-  isResizing.value = true
-  resizeStart.value = { x: e.clientX, y: e.clientY, w: w.value, h: h.value }
-}
-
 function onWindowResize() {
   if (collapsed.value) return
-  // pencere küçülürse sığdır
   if (x.value + w.value > window.innerWidth) x.value = Math.max(0, window.innerWidth - w.value)
   if (y.value + h.value > window.innerHeight) y.value = Math.max(0, window.innerHeight - h.value)
 }
 
-// Store'u open/close durumu ile eşitle — bottom-right-bar buna göre kayacak
-watch(collapsed, (v) => { chatStore.popupOpen = !v }, { immediate: true })
+function handleExport(data: { image: string; shapes: any; prompt: string }) {
+  const shapeCount = Object.values(data.shapes ?? {}).flat().length
+  const msg = data.prompt
+    ? `${data.prompt}\n\n[Taslak çizim eklendi — ${shapeCount} şekil]`
+    : `[Taslak çizim eklendi — ${shapeCount} şekil]`
+  chatStore.sendMessage(msg)
+  // Çizimi gönderdikten sonra popup'ı küçült — chat popup'ına hazır
+  collapse()
+}
 
 onMounted(() => {
-  placeBottomRight()
-  // Store'dan auto-open sinyali varsa popup'ı aç (yeni proje akışı)
-  if (chatStore.popupAutoOpen) {
-    chatStore.popupAutoOpen = false
-    openPopup()
-  }
+  placeNextToChat()
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
   window.addEventListener('resize', onWindowResize)
 })
 onBeforeUnmount(() => {
-  chatStore.popupOpen = false
+  chatStore.drawingPopupOpen = false
   document.removeEventListener('mousemove', onMouseMove)
   document.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('resize', onWindowResize)
 })
-
-// Önemsiz kullanım uyarısını susturmak için referans
-void chatStore
 </script>
 
 <style scoped>
-.chat-fab {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
+.draw-fab {
+  position: relative;
   z-index: 100;
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--accent-blue);
+  background: var(--accent-purple, #8b5cf6);
   color: #fff;
   border: none;
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.15s, box-shadow 0.15s;
 }
-.chat-fab:hover {
+.draw-fab:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 10px 24px rgba(139, 92, 246, 0.5);
 }
-.chat-fab :deep(svg) { width: 24px; height: 24px; }
-.fab-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+.draw-fab :deep(svg) { width: 22px; height: 22px; }
 
-.chat-popup {
+.draw-popup {
   position: fixed;
   z-index: 100;
   background: var(--bg-primary);
@@ -211,9 +194,13 @@ void chatStore
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: box-shadow 0.1s;
+  transition: left 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+              top 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.chat-popup.dragging { box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5); }
+.draw-popup.dragging {
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+  transition: none;
+}
 
 .popup-head {
   display: flex;
@@ -224,6 +211,7 @@ void chatStore
   border-bottom: 1px solid var(--border-default);
   cursor: move;
   user-select: none;
+  flex-shrink: 0;
 }
 .head-title {
   display: flex;
@@ -233,7 +221,11 @@ void chatStore
   font-weight: 600;
   color: var(--text-primary);
 }
-.head-title :deep(svg) { color: var(--accent-purple, #8b5cf6); }
+.head-title :deep(svg) {
+  color: var(--accent-purple, #8b5cf6);
+  width: 16px;
+  height: 16px;
+}
 
 .head-actions { display: flex; gap: 2px; }
 .head-btn {
@@ -257,6 +249,12 @@ void chatStore
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+}
+.popup-body > :deep(*) {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
 }
 
 .resize-corner {
