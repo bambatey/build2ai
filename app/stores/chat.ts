@@ -237,25 +237,33 @@ export const useChatStore = defineStore('chat', {
           throw new Error('Yanıt body\'si yok')
         }
 
-        // SSE stream oku
+        // SSE stream oku — buffer ile chunk'lar arası tam mesaj birleştirme
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let fullContent = ''
+        let sseBuffer = ''
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\n').filter(line => line.trim())
+          sseBuffer += decoder.decode(value, { stream: true })
+          // SSE protokolü: mesajlar `\n\n` ile ayrılır.
+          // Yarım kalan son parçayı buffer'da tutuyoruz.
+          const messages = sseBuffer.split('\n\n')
+          sseBuffer = messages.pop() ?? ''
 
-          for (const line of lines) {
-            let jsonStr = line
-            if (line.startsWith('data: ')) {
-              jsonStr = line.slice(6)
+          for (const message of messages) {
+            const trimmed = message.trim()
+            if (!trimmed) continue
+            // Bir mesaj birden fazla `data:` satırı içerebilir; biz hepsini birleştiriyoruz
+            const dataLines: string[] = []
+            for (const line of trimmed.split('\n')) {
+              if (line.startsWith('data: ')) dataLines.push(line.slice(6))
+              else if (line.startsWith('data:')) dataLines.push(line.slice(5))
             }
-
-            if (!jsonStr.trim()) continue
+            const jsonStr = dataLines.join('\n').trim()
+            if (!jsonStr) continue
 
             try {
               const parsed = JSON.parse(jsonStr)
